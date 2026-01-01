@@ -11,3 +11,5 @@ anthropic>=0.75.0
 # Utilities
 python-dotenv>=1.0.0
 requests>=2.31.0
+
+# Note: gitpython can be added for more advanced git operations if needed

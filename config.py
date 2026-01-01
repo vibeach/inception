@@ -28,8 +28,8 @@ CLAUDE_CODE_OAUTH_TOKEN = os.getenv("CLAUDE_CODE_OAUTH_TOKEN", "")
 DEFAULT_GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 
 # Render API settings (for managing deployments)
-RENDER_API_KEY = os.getenv("RENDER_API_KEY", "")
-RENDER_OWNER_ID = os.getenv("RENDER_OWNER_ID", "")  # Your Render team/user ID
+RENDER_API_KEY = os.getenv("RENDER_API_KEY", "rnd_nNfsmyrFUfKXwbeTJ7ycN5ssAd0K")
+RENDER_OWNER_ID = os.getenv("RENDER_OWNER_ID", "tea-d579pj3e5dus73d7hue0")  # Your Render team/user ID
 
 # Embedded processor (auto-start processor in dashboard process)
 EMBEDDED_PROCESSOR = os.getenv("EMBEDDED_PROCESSOR", "1" if os.getenv("RENDER") else "0") == "1"

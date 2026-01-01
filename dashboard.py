@@ -21,6 +21,7 @@ import dynamic_config
 import incept_plus_suggester
 import incept_plus_tracker
 import incept_processor
+import project_automation
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -82,21 +83,76 @@ def new_project():
     """Create a new project."""
     if request.method == 'POST':
         try:
-            project_id = database.add_project(
-                name=request.form['name'],
-                description=request.form.get('description'),
-                repo_url=request.form['repo_url'],
-                repo_branch=request.form.get('repo_branch', 'main'),
-                github_token=request.form.get('github_token') or config.DEFAULT_GITHUB_TOKEN,
-                local_path=request.form.get('local_path'),
-                render_service_id=request.form.get('render_service_id'),
-                render_service_url=request.form.get('render_service_url'),
-                project_type=request.form.get('project_type')
-            )
-            flash(f'Project "{request.form["name"]}" created successfully!', 'success')
-            return redirect(url_for('project_detail', project_id=project_id))
+            # Check if automated creation is requested
+            auto_create = request.form.get('auto_create') == 'on'
+
+            if auto_create:
+                # Automated project creation
+                github_token = request.form.get('github_token') or config.DEFAULT_GITHUB_TOKEN
+                render_api_key = request.form.get('render_api_key') or os.getenv('RENDER_API_KEY')
+                render_owner_id = request.form.get('render_owner_id') or os.getenv('RENDER_OWNER_ID')
+
+                if not github_token:
+                    flash('GitHub token required for automated creation', 'error')
+                    return render_template('new_project.html')
+
+                if not render_api_key or not render_owner_id:
+                    flash('Render API key and Owner ID required for automated creation', 'error')
+                    return render_template('new_project.html')
+
+                # Create project automatically
+                success, result = project_automation.create_full_project(
+                    project_name=request.form['name'],
+                    description=request.form.get('description'),
+                    project_type=request.form.get('project_type', 'Flask'),
+                    github_token=github_token,
+                    render_api_key=render_api_key,
+                    render_owner_id=render_owner_id,
+                    private=request.form.get('private_repo') == 'on'
+                )
+
+                if not success:
+                    flash(f'Automated creation failed: {result}', 'error')
+                    return render_template('new_project.html')
+
+                # Add to database with automated details
+                project_id = database.add_project(
+                    name=result['name'],
+                    description=result['description'],
+                    repo_url=result['repo_url'],
+                    repo_branch=result['repo_branch'],
+                    github_token=result['github_token'],
+                    local_path=None,  # Render will clone it
+                    render_service_id=result['render_service_id'],
+                    render_service_url=result['render_service_url'],
+                    project_type=result['project_type']
+                )
+
+                flash(f'Project "{result["name"]}" created and deployed automatically! 🚀', 'success')
+                flash(f'GitHub: {result["repo_html_url"]}', 'success')
+                flash(f'Render: {result["render_service_url"]}', 'success')
+                return redirect(url_for('project_detail', project_id=project_id))
+
+            else:
+                # Manual project creation
+                project_id = database.add_project(
+                    name=request.form['name'],
+                    description=request.form.get('description'),
+                    repo_url=request.form['repo_url'],
+                    repo_branch=request.form.get('repo_branch', 'main'),
+                    github_token=request.form.get('github_token') or config.DEFAULT_GITHUB_TOKEN,
+                    local_path=request.form.get('local_path'),
+                    render_service_id=request.form.get('render_service_id'),
+                    render_service_url=request.form.get('render_service_url'),
+                    project_type=request.form.get('project_type')
+                )
+                flash(f'Project "{request.form["name"]}" created successfully!', 'success')
+                return redirect(url_for('project_detail', project_id=project_id))
+
         except Exception as e:
             flash(f'Error creating project: {str(e)}', 'error')
+            import traceback
+            traceback.print_exc()
 
     return render_template('new_project.html')
 
