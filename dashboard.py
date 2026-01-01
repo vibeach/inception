@@ -89,8 +89,8 @@ def new_project():
             if auto_create:
                 # Automated project creation
                 github_token = request.form.get('github_token') or config.DEFAULT_GITHUB_TOKEN
-                render_api_key = request.form.get('render_api_key') or os.getenv('RENDER_API_KEY')
-                render_owner_id = request.form.get('render_owner_id') or os.getenv('RENDER_OWNER_ID')
+                render_api_key = request.form.get('render_api_key') or config.RENDER_API_KEY
+                render_owner_id = request.form.get('render_owner_id') or config.RENDER_OWNER_ID
 
                 if not github_token:
                     flash('GitHub token required for automated creation', 'error')
