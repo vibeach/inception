@@ -13,23 +13,26 @@ DATA_DIR = os.getenv("DATA_DIR", os.path.dirname(__file__))
 DATABASE_PATH = os.path.join(DATA_DIR, "inception.db")
 
 # Dashboard settings
-DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "aaa")
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "change-me-in-production")
 DASHBOARD_HOST = os.getenv("DASHBOARD_HOST", "0.0.0.0")
 DASHBOARD_PORT = int(os.getenv("DASHBOARD_PORT", "5000"))
-SECRET_KEY = os.getenv("SECRET_KEY", "change-this-secret-key-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 
 # AI API settings (Claude API)
 # Get your API key from https://console.anthropic.com/
+# REQUIRED: Set ANTHROPIC_API_KEY in Render environment variables
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_CODE_OAUTH_TOKEN = os.getenv("CLAUDE_CODE_OAUTH_TOKEN", "")
 
 # GitHub settings (for git operations)
 # These can be overridden per-project in the database
+# REQUIRED: Set GITHUB_TOKEN in Render environment variables
 DEFAULT_GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 
 # Render API settings (for managing deployments)
-RENDER_API_KEY = os.getenv("RENDER_API_KEY", "rnd_nNfsmyrFUfKXwbeTJ7ycN5ssAd0K")
-RENDER_OWNER_ID = os.getenv("RENDER_OWNER_ID", "tea-d579pj3e5dus73d7hue0")  # Your Render team/user ID
+# REQUIRED for automated project creation: Set these in Render environment variables
+RENDER_API_KEY = os.getenv("RENDER_API_KEY", "")
+RENDER_OWNER_ID = os.getenv("RENDER_OWNER_ID", "")  # Your Render team/user ID
 
 # Embedded processor (auto-start processor in dashboard process)
 EMBEDDED_PROCESSOR = os.getenv("EMBEDDED_PROCESSOR", "1" if os.getenv("RENDER") else "0") == "1"
