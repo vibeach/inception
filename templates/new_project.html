@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}New Project - Inception{% endblock %}
+
+{% block content %}
+<h1 style="font-size: 28px; color: #60a5fa; margin-bottom: 20px;">Create New Project</h1>
+
+<div class="card">
+    <form method="POST">
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label for="name">Project Name *</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="project_type">Project Type</label>
+                <select id="project_type" name="project_type">
+                    <option value="">Select...</option>
+                    <option value="Flask">Flask</option>
+                    <option value="Django">Django</option>
+                    <option value="Node.js">Node.js</option>
+                    <option value="React">React</option>
+                    <option value="Next.js">Next.js</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="3"></textarea>
+        </div>
+
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label for="repo_url">Git Repository URL *</label>
+                <input type="text" id="repo_url" name="repo_url" placeholder="https://github.com/user/repo.git" required>
+            </div>
+
+            <div class="form-group">
+                <label for="repo_branch">Branch</label>
+                <input type="text" id="repo_branch" name="repo_branch" value="main">
+            </div>
+        </div>
+
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label for="local_path">Local Path</label>
+                <input type="text" id="local_path" name="local_path" placeholder="/path/to/project">
+            </div>
+
+            <div class="form-group">
+                <label for="github_token">GitHub Token (optional)</label>
+                <input type="text" id="github_token" name="github_token" placeholder="ghp_...">
+                <small style="color: #64748b; font-size: 12px;">Leave empty to use default token</small>
+            </div>
+        </div>
+
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label for="render_service_id">Render Service ID (optional)</label>
+                <input type="text" id="render_service_id" name="render_service_id" placeholder="srv-...">
+            </div>
+
+            <div class="form-group">
+                <label for="render_service_url">Render Service URL (optional)</label>
+                <input type="text" id="render_service_url" name="render_service_url" placeholder="https://...">
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button type="submit" class="btn btn-primary">Create Project</button>
+            <a href="/" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

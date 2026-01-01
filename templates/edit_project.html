@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ project.name }} - Inception{% endblock %}
+
+{% block content %}
+<h1 style="font-size: 28px; color: #60a5fa; margin-bottom: 20px;">Edit Project: {{ project.name }}</h1>
+
+<div class="card">
+    <form method="POST">
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label for="name">Project Name *</label>
+                <input type="text" id="name" name="name" value="{{ project.name }}" required>
+            </div>
+
+            <div class="form-group">
+                <label for="project_type">Project Type</label>
+                <select id="project_type" name="project_type">
+                    <option value="">Select...</option>
+                    <option value="Flask" {% if project.project_type == 'Flask' %}selected{% endif %}>Flask</option>
+                    <option value="Django" {% if project.project_type == 'Django' %}selected{% endif %}>Django</option>
+                    <option value="Node.js" {% if project.project_type == 'Node.js' %}selected{% endif %}>Node.js</option>
+                    <option value="React" {% if project.project_type == 'React' %}selected{% endif %}>React</option>
+                    <option value="Next.js" {% if project.project_type == 'Next.js' %}selected{% endif %}>Next.js</option>
+                    <option value="Other" {% if project.project_type == 'Other' %}selected{% endif %}>Other</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="3">{{ project.description or '' }}</textarea>
+        </div>
+
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label for="repo_url">Git Repository URL *</label>
+                <input type="text" id="repo_url" name="repo_url" value="{{ project.repo_url }}" required>
+            </div>
+
+            <div class="form-group">
+                <label for="repo_branch">Branch</label>
+                <input type="text" id="repo_branch" name="repo_branch" value="{{ project.repo_branch or 'main' }}">
+            </div>
+        </div>
+
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label for="local_path">Local Path</label>
+                <input type="text" id="local_path" name="local_path" value="{{ project.local_path or '' }}">
+            </div>
+
+            <div class="form-group">
+                <label for="github_token">GitHub Token</label>
+                <input type="text" id="github_token" name="github_token" value="{{ project.github_token or '' }}" placeholder="ghp_...">
+            </div>
+        </div>
+
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label for="render_service_id">Render Service ID</label>
+                <input type="text" id="render_service_id" name="render_service_id" value="{{ project.render_service_id or '' }}">
+            </div>
+
+            <div class="form-group">
+                <label for="render_service_url">Render Service URL</label>
+                <input type="text" id="render_service_url" name="render_service_url" value="{{ project.render_service_url or '' }}">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="status">Status</label>
+            <select id="status" name="status">
+                <option value="active" {% if project.status == 'active' %}selected{% endif %}>Active</option>
+                <option value="archived" {% if project.status == 'archived' %}selected{% endif %}>Archived</option>
+                <option value="maintenance" {% if project.status == 'maintenance' %}selected{% endif %}>Maintenance</option>
+            </select>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+                <a href="/projects/{{ project.id }}" class="btn btn-secondary">Cancel</a>
+            </div>
+            <button type="button" onclick="if(confirm('Delete this project? This cannot be undone!')) { deleteProject(); }" class="btn btn-danger">
+                Delete Project
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function deleteProject() {
+    fetch('/projects/{{ project.id }}/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    }).then(() => {
+        window.location.href = '/';
+    });
+}
+</script>
+{% endblock %}

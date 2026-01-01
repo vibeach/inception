@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+
+{% block title %}Incept+ - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1 style="font-size: 28px; color: #10b981;">Incept+: {{ project.name }}</h1>
+    <a href="/projects/{{ project.id }}" class="btn btn-secondary">← Back to Project</a>
+</div>
+
+<!-- Tabs -->
+<div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #334155;">
+    <button onclick="showTab('generate')" id="tab-generate" class="tab-btn active" style="padding: 10px 20px; background: none; border: none; color: #94a3b8; cursor: pointer; border-bottom: 2px solid transparent;">
+        Generate Suggestions
+    </button>
+    <button onclick="showTab('suggestions')" id="tab-suggestions" class="tab-btn" style="padding: 10px 20px; background: none; border: none; color: #94a3b8; cursor: pointer; border-bottom: 2px solid transparent;">
+        Suggestions ({{ suggestions|length }})
+    </button>
+    <button onclick="showTab('improvements')" id="tab-improvements" class="tab-btn" style="padding: 10px 20px; background: none; border: none; color: #94a3b8; cursor: pointer; border-bottom: 2px solid transparent;">
+        Improvements ({{ improvements|length }})
+    </button>
+    <button onclick="showTab('auto')" id="tab-auto" class="tab-btn" style="padding: 10px 20px; background: none; border: none; color: #94a3b8; cursor: pointer; border-bottom: 2px solid transparent;">
+        Auto-Mode
+    </button>
+</div>
+
+<!-- Generate Tab -->
+<div id="content-generate" class="tab-content">
+    <div class="card">
+        <h2>Generate Improvement Suggestions</h2>
+        <form id="generate-form" style="margin-top: 15px;">
+            <div class="form-group">
+                <label for="direction">Direction / Focus Area</label>
+                <textarea id="direction" rows="3" placeholder="Example: Make the UI more responsive and mobile-friendly"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="context">Additional Context (optional)</label>
+                <textarea id="context" rows="2" placeholder="Example: We're using Tailwind CSS and React"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="max-suggestions">Number of Suggestions</label>
+                <input type="number" id="max-suggestions" value="5" min="1" max="20">
+            </div>
+
+            <button type="submit" class="btn btn-success">Generate Suggestions</button>
+        </form>
+    </div>
+</div>
+
+<!-- Suggestions Tab -->
+<div id="content-suggestions" class="tab-content" style="display: none;">
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h2>Suggestions</h2>
+            <select id="filter-status" onchange="filterSuggestions()" style="padding: 8px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0;">
+                <option value="">All Statuses</option>
+                <option value="suggested">Suggested</option>
+                <option value="accepted">Accepted</option>
+                <option value="rejected">Rejected</option>
+                <option value="implementing">Implementing</option>
+                <option value="implemented">Implemented</option>
+            </select>
+        </div>
+
+        <div id="suggestions-list">
+            {% if suggestions %}
+            {% for sug in suggestions %}
+            <div class="suggestion-item" data-status="{{ sug.status }}" style="border: 1px solid #334155; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                    <div>
+                        <h3 style="color: #60a5fa; font-size: 18px; margin-bottom: 5px;">{{ sug.title }}</h3>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <span class="badge badge-{{ sug.status }}">{{ sug.status }}</span>
+                            <span class="badge" style="background: #6366f1;">{{ sug.category }}</span>
+                            <span class="badge" style="background: #f59e0b;">Priority: {{ sug.priority }}/5</span>
+                            <span class="badge" style="background: #8b5cf6;">{{ sug.estimated_effort or 'Unknown' }}</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 5px;">
+                        {% if sug.status == 'suggested' %}
+                        <button onclick="acceptSuggestion({{ sug.id }})" class="btn btn-success" style="padding: 5px 10px; font-size: 12px;">Accept</button>
+                        <button onclick="rejectSuggestion({{ sug.id }})" class="btn btn-danger" style="padding: 5px 10px; font-size: 12px;">Reject</button>
+                        {% endif %}
+                        {% if sug.status in ['suggested', 'accepted'] %}
+                        <button onclick="implementSuggestion({{ sug.id }})" class="btn btn-primary" style="padding: 5px 10px; font-size: 12px;">Implement Now</button>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <p style="color: #94a3b8; margin-bottom: 10px;">{{ sug.description }}</p>
+
+                <details style="margin-top: 10px;">
+                    <summary style="cursor: pointer; color: #60a5fa;">Implementation Details</summary>
+                    <pre style="background: #0f172a; padding: 10px; border-radius: 6px; margin-top: 10px; overflow-x: auto; color: #e2e8f0; font-size: 13px;">{{ sug.implementation_details }}</pre>
+                </details>
+            </div>
+            {% endfor %}
+            {% else %}
+            <p style="color: #64748b;">No suggestions yet. Generate some suggestions in the "Generate" tab!</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Improvements Tab -->
+<div id="content-improvements" class="tab-content" style="display: none;">
+    <div class="card">
+        <h2>Implemented Improvements</h2>
+        <div style="margin-top: 15px;">
+            {% if improvements %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>Commit</th>
+                        <th>Files Changed</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for imp in improvements %}
+                    <tr>
+                        <td>#{{ imp.id }}</td>
+                        <td>{{ imp.title }}</td>
+                        <td style="font-family: monospace; color: #94a3b8;">
+                            {{ imp.commit_hash[:7] if imp.commit_hash else 'N/A' }}
+                        </td>
+                        <td style="color: #94a3b8; font-size: 12px;">
+                            {% if imp.files_changed %}
+                            {{ imp.files_changed|length }} files
+                            {% else %}
+                            N/A
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge" style="background: {% if imp.enabled %}#10b981{% else %}#64748b{% endif %};">
+                                {% if imp.enabled %}Enabled{% else %}Disabled{% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            {% if imp.enabled %}
+                            <button onclick="rollbackImprovement({{ imp.id }})" class="btn btn-danger" style="padding: 5px 10px; font-size: 12px;">
+                                Rollback
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p style="color: #64748b;">No improvements implemented yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Auto-Mode Tab -->
+<div id="content-auto" class="tab-content" style="display: none;">
+    <div class="card">
+        <h2>Auto-Mode</h2>
+        <p style="color: #94a3b8; margin-bottom: 15px;">
+            Auto-mode continuously generates and implements improvements based on your direction.
+        </p>
+
+        {% if auto_session %}
+        <div style="background: #10b981; color: white; padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+            <strong>Auto-mode is running!</strong>
+            <div style="margin-top: 10px;">
+                Direction: {{ auto_session.direction }}<br>
+                Progress: {{ auto_session.suggestions_generated }} / {{ auto_session.max_suggestions }} suggestions
+            </div>
+            <button onclick="stopAutoMode({{ auto_session.id }})" class="btn btn-danger" style="margin-top: 10px;">
+                Stop Auto-Mode
+            </button>
+        </div>
+        {% else %}
+        <form id="auto-form">
+            <div class="form-group">
+                <label for="auto-direction">Direction</label>
+                <textarea id="auto-direction" rows="3" placeholder="Example: Continuously improve performance and user experience"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="auto-max">Maximum Suggestions</label>
+                <input type="number" id="auto-max" value="10" min="1" max="100">
+            </div>
+
+            <button type="submit" class="btn btn-success">Start Auto-Mode</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.tab-btn.active {
+    color: #10b981 !important;
+    border-bottom-color: #10b981 !important;
+}
+</style>
+
+<script>
+const projectId = {{ project.id }};
+
+function showTab(name) {
+    // Hide all content
+    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+    // Show selected
+    document.getElementById(`content-${name}`).style.display = 'block';
+    document.getElementById(`tab-${name}`).classList.add('active');
+}
+
+// Generate suggestions
+document.getElementById('generate-form').onsubmit = async (e) => {
+    e.preventDefault();
+
+    const direction = document.getElementById('direction').value.trim();
+    if (!direction) {
+        alert('Please enter a direction');
+        return;
+    }
+
+    const btn = e.target.querySelector('button');
+    btn.textContent = 'Generating...';
+    btn.disabled = true;
+
+    const response = await fetch('/api/incept-plus/suggest', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            project_id: projectId,
+            direction: direction,
+            context: document.getElementById('context').value,
+            max_suggestions: parseInt(document.getElementById('max-suggestions').value)
+        })
+    });
+
+    btn.textContent = 'Generate Suggestions';
+    btn.disabled = false;
+
+    if (response.ok) {
+        alert('Suggestions generated!');
+        location.reload();
+    } else {
+        const data = await response.json();
+        alert('Error: ' + (data.error || 'Unknown error'));
+    }
+};
+
+// Filter suggestions
+function filterSuggestions() {
+    const status = document.getElementById('filter-status').value;
+    document.querySelectorAll('.suggestion-item').forEach(item => {
+        if (!status || item.dataset.status === status) {
+            item.style.display = 'block';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+// Suggestion actions
+async function acceptSuggestion(id) {
+    await fetch(`/api/incept-plus/suggestion/${id}/accept`, {method: 'POST'});
+    location.reload();
+}
+
+async function rejectSuggestion(id) {
+    await fetch(`/api/incept-plus/suggestion/${id}/reject`, {method: 'POST'});
+    location.reload();
+}
+
+async function implementSuggestion(id) {
+    if (!confirm('Create an Incept request to implement this suggestion?')) return;
+
+    const response = await fetch(`/api/incept-plus/suggestion/${id}/implement`, {method: 'POST'});
+    if (response.ok) {
+        alert('Implementation request created!');
+        location.reload();
+    } else {
+        alert('Error creating request');
+    }
+}
+
+// Rollback improvement
+async function rollbackImprovement(id) {
+    if (!confirm('Rollback this improvement? This will create a git revert commit.')) return;
+
+    const response = await fetch(`/api/incept-plus/improvement/${id}/rollback`, {method: 'POST'});
+    const data = await response.json();
+
+    if (data.success) {
+        alert('Success: ' + data.message);
+        location.reload();
+    } else {
+        alert('Error: ' + data.message);
+    }
+}
+
+// Auto-mode
+document.getElementById('auto-form').onsubmit = async (e) => {
+    e.preventDefault();
+
+    const direction = document.getElementById('auto-direction').value.trim();
+    if (!direction) {
+        alert('Please enter a direction');
+        return;
+    }
+
+    const response = await fetch('/api/incept-plus/auto-mode/start', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            project_id: projectId,
+            direction: direction,
+            max_suggestions: parseInt(document.getElementById('auto-max').value)
+        })
+    });
+
+    if (response.ok) {
+        alert('Auto-mode started!');
+        location.reload();
+    } else {
+        const data = await response.json();
+        alert('Error: ' + (data.error || 'Unknown error'));
+    }
+};
+
+async function stopAutoMode(sessionId) {
+    await fetch(`/api/incept-plus/auto-mode/stop/${sessionId}`, {method: 'POST'});
+    location.reload();
+}
+</script>
+{% endblock %}

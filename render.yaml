@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: inception
+    runtime: python
+    plan: starter  # $7/month - upgrade to standard for better performance
+    buildCommand: pip install -r requirements.txt
+    startCommand: bash start.sh
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: EMBEDDED_PROCESSOR
+        value: 1
+      - key: RENDER
+        value: true
+      # Add these via Render dashboard (sensitive):
+      # - ANTHROPIC_API_KEY
+      # - DASHBOARD_PASSWORD
+      # - SECRET_KEY
+      # - GITHUB_TOKEN (default)
+      # - RENDER_API_KEY (optional, for creating new services)
+    disk:
+      name: inception-data
+      mountPath: /data
+      sizeGB: 1  # 1GB persistent storage for database and config

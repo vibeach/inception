@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Projects - Inception{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1 style="font-size: 28px; color: #60a5fa;">All Projects</h1>
+    <a href="/projects/new" class="btn btn-primary">+ New Project</a>
+</div>
+
+{% if projects %}
+<div class="grid grid-3">
+    {% for project in projects %}
+    <div class="card">
+        <h2>
+            <a href="/projects/{{ project.id }}" style="color: #60a5fa; text-decoration: none;">
+                {{ project.name }}
+            </a>
+        </h2>
+
+        {% if project.description %}
+        <p style="color: #94a3b8; margin-bottom: 15px; font-size: 14px;">
+            {{ project.description[:100] }}{% if project.description|length > 100 %}...{% endif %}
+        </p>
+        {% endif %}
+
+        <div style="margin-bottom: 15px;">
+            <span class="badge badge-{{ project.status or 'active' }}">
+                {{ project.status or 'active' }}
+            </span>
+            {% if project.project_type %}
+            <span class="badge" style="background: #6366f1;">{{ project.project_type }}</span>
+            {% endif %}
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px; font-size: 14px;">
+            <div>
+                <div style="color: #64748b;">Pending</div>
+                <div style="color: #fbbf24; font-weight: 600;">{{ project.pending_requests }}</div>
+            </div>
+            <div>
+                <div style="color: #64748b;">Total Requests</div>
+                <div style="color: #e2e8f0; font-weight: 600;">{{ project.total_requests }}</div>
+            </div>
+            <div>
+                <div style="color: #64748b;">Suggestions</div>
+                <div style="color: #6366f1; font-weight: 600;">{{ project.suggestions }}</div>
+            </div>
+            <div>
+                <div style="color: #64748b;">Improvements</div>
+                <div style="color: #10b981; font-weight: 600;">{{ project.improvements }}</div>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+            <a href="/projects/{{ project.id }}/incept" class="btn btn-secondary" style="flex: 1; text-align: center;">
+                Incept
+            </a>
+            <a href="/projects/{{ project.id }}/incept-plus" class="btn btn-success" style="flex: 1; text-align: center;">
+                Incept+
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 60px 20px;">
+    <p style="color: #64748b; font-size: 18px; margin-bottom: 20px;">
+        No projects yet. Create your first project to get started!
+    </p>
+    <a href="/projects/new" class="btn btn-primary">Create Project</a>
+</div>
+{% endif %}
+{% endblock %}

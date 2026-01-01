@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} - Inception{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div>
+        <h1 style="font-size: 28px; color: #60a5fa;">{{ project.name }}</h1>
+        {% if project.description %}
+        <p style="color: #94a3b8; margin-top: 5px;">{{ project.description }}</p>
+        {% endif %}
+    </div>
+    <div style="display: flex; gap: 10px;">
+        <a href="/projects/{{ project.id }}/edit" class="btn btn-secondary">Edit</a>
+        <a href="/projects/{{ project.id }}/incept" class="btn btn-primary">Incept</a>
+        <a href="/projects/{{ project.id }}/incept-plus" class="btn btn-success">Incept+</a>
+    </div>
+</div>
+
+<!-- Project Info -->
+<div class="card">
+    <h2>Project Information</h2>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 15px;">
+        <div>
+            <strong style="color: #94a3b8;">Repository:</strong>
+            <div style="color: #e2e8f0; margin-top: 5px;">
+                <a href="{{ project.repo_url }}" target="_blank" style="color: #60a5fa;">{{ project.repo_url }}</a>
+            </div>
+        </div>
+        <div>
+            <strong style="color: #94a3b8;">Branch:</strong>
+            <div style="color: #e2e8f0; margin-top: 5px;">{{ project.repo_branch or 'main' }}</div>
+        </div>
+        <div>
+            <strong style="color: #94a3b8;">Local Path:</strong>
+            <div style="color: #e2e8f0; margin-top: 5px;">{{ project.local_path or 'Not set' }}</div>
+        </div>
+        <div>
+            <strong style="color: #94a3b8;">Project Type:</strong>
+            <div style="color: #e2e8f0; margin-top: 5px;">{{ project.project_type or 'Not specified' }}</div>
+        </div>
+        {% if project.render_service_url %}
+        <div>
+            <strong style="color: #94a3b8;">Render Service:</strong>
+            <div style="color: #e2e8f0; margin-top: 5px;">
+                <a href="{{ project.render_service_url }}" target="_blank" style="color: #60a5fa;">View on Render</a>
+            </div>
+        </div>
+        {% endif %}
+        <div>
+            <strong style="color: #94a3b8;">Status:</strong>
+            <div style="margin-top: 5px;">
+                <span class="badge badge-{{ project.status or 'active' }}">{{ project.status or 'active' }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Requests -->
+<div class="card">
+    <h2>Recent Requests</h2>
+    {% if requests %}
+    <table style="margin-top: 15px;">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Request</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for req in requests %}
+            <tr>
+                <td>#{{ req.id }}</td>
+                <td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    {{ req.text }}
+                </td>
+                <td><span class="badge badge-{{ req.status }}">{{ req.status }}</span></td>
+                <td style="color: #94a3b8;">{{ req.created_at }}</td>
+                <td>
+                    <a href="/projects/{{ project.id }}/incept#request-{{ req.id }}" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;">
+                        View
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #64748b; margin-top: 15px;">No requests yet.</p>
+    {% endif %}
+    <div style="margin-top: 15px;">
+        <a href="/projects/{{ project.id }}/incept" class="btn btn-primary">View All Requests</a>
+    </div>
+</div>
+
+<!-- Recent Suggestions -->
+<div class="card">
+    <h2>Recent Suggestions</h2>
+    {% if suggestions %}
+    <table style="margin-top: 15px;">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Category</th>
+                <th>Priority</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sug in suggestions %}
+            <tr>
+                <td>#{{ sug.id }}</td>
+                <td>{{ sug.title }}</td>
+                <td><span class="badge" style="background: #6366f1;">{{ sug.category }}</span></td>
+                <td>{{ sug.priority }}/5</td>
+                <td><span class="badge badge-{{ sug.status }}">{{ sug.status }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #64748b; margin-top: 15px;">No suggestions yet.</p>
+    {% endif %}
+    <div style="margin-top: 15px;">
+        <a href="/projects/{{ project.id }}/incept-plus" class="btn btn-success">View All Suggestions</a>
+    </div>
+</div>
+
+<!-- Recent Improvements -->
+<div class="card">
+    <h2>Recent Improvements</h2>
+    {% if improvements %}
+    <table style="margin-top: 15px;">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Commit</th>
+                <th>Status</th>
+                <th>Created</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for imp in improvements %}
+            <tr>
+                <td>#{{ imp.id }}</td>
+                <td>{{ imp.title }}</td>
+                <td style="font-family: monospace; color: #94a3b8;">
+                    {{ imp.commit_hash[:7] if imp.commit_hash else 'N/A' }}
+                </td>
+                <td>
+                    <span class="badge" style="background: {% if imp.enabled %}#10b981{% else %}#64748b{% endif %};">
+                        {% if imp.enabled %}Enabled{% else %}Disabled{% endif %}
+                    </span>
+                </td>
+                <td style="color: #94a3b8;">{{ imp.created_at }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #64748b; margin-top: 15px;">No improvements yet.</p>
+    {% endif %}
+    <div style="margin-top: 15px;">
+        <a href="/projects/{{ project.id }}/incept-plus" class="btn btn-success">View All Improvements</a>
+    </div>
+</div>
+{% endblock %}

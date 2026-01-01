@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}Incept - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1 style="font-size: 28px; color: #60a5fa;">Incept: {{ project.name }}</h1>
+    <a href="/projects/{{ project.id }}" class="btn btn-secondary">← Back to Project</a>
+</div>
+
+<!-- Submit Request Form -->
+<div class="card">
+    <h2>Submit Improvement Request</h2>
+    <form id="request-form" style="margin-top: 15px;">
+        <div class="form-group">
+            <label for="request-text">What would you like to improve?</label>
+            <textarea id="request-text" rows="4" placeholder="Example: Add a dark mode toggle to the settings page"></textarea>
+        </div>
+
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label for="model">Model</label>
+                <select id="model">
+                    <option value="claude-sonnet-4-20250514" {% if settings.model == 'claude-sonnet-4-20250514' %}selected{% endif %}>Claude Sonnet 4</option>
+                    <option value="claude-opus-4-20250514" {% if settings.model == 'claude-opus-4-20250514' %}selected{% endif %}>Claude Opus 4</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="auto-push">
+                    <input type="checkbox" id="auto-push" checked style="width: auto; margin-right: 5px;">
+                    Auto-push to git
+                </label>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Submit Request</button>
+    </form>
+</div>
+
+<!-- Requests List -->
+<div class="card">
+    <h2>Request History</h2>
+    <div id="requests-list" style="margin-top: 15px;">
+        {% if requests %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Request</th>
+                    <th>Status</th>
+                    <th>Model</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in requests %}
+                <tr id="request-{{ req.id }}">
+                    <td>#{{ req.id }}</td>
+                    <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">
+                        {{ req.text }}
+                    </td>
+                    <td><span class="badge badge-{{ req.status }}">{{ req.status }}</span></td>
+                    <td style="font-size: 12px; color: #94a3b8;">{{ req.model }}</td>
+                    <td style="color: #94a3b8; font-size: 12px;">{{ req.created_at }}</td>
+                    <td>
+                        <button onclick="viewLogs({{ req.id }})" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;">
+                            Logs
+                        </button>
+                        {% if req.status == 'pending' %}
+                        <button onclick="cancelRequest({{ req.id }})" class="btn btn-danger" style="padding: 5px 10px; font-size: 12px;">
+                            Cancel
+                        </button>
+                        {% elif req.status in ['completed', 'error'] %}
+                        <button onclick="restartRequest({{ req.id }})" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;">
+                            Restart
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color: #64748b;">No requests yet. Submit your first improvement request above!</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Logs Modal (will be populated dynamically) -->
+<div id="logs-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; padding: 40px;">
+    <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; max-width: 900px; margin: 0 auto; max-height: 80vh; display: flex; flex-direction: column;">
+        <div style="padding: 20px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
+            <h2 id="logs-title" style="color: #60a5fa;">Request Logs</h2>
+            <button onclick="closeLogs()" class="btn btn-secondary">Close</button>
+        </div>
+        <div id="logs-content" style="padding: 20px; overflow-y: auto; flex: 1; font-family: monospace; font-size: 13px;">
+            <!-- Logs will be inserted here -->
+        </div>
+    </div>
+</div>
+
+<script>
+const projectId = {{ project.id }};
+
+// Submit request
+document.getElementById('request-form').onsubmit = async (e) => {
+    e.preventDefault();
+
+    const text = document.getElementById('request-text').value.trim();
+    if (!text) {
+        alert('Please enter a request');
+        return;
+    }
+
+    const response = await fetch('/api/incept/request', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            project_id: projectId,
+            text: text,
+            model: document.getElementById('model').value,
+            auto_push: document.getElementById('auto-push').checked
+        })
+    });
+
+    if (response.ok) {
+        alert('Request submitted!');
+        document.getElementById('request-text').value = '';
+        location.reload();
+    } else {
+        alert('Error submitting request');
+    }
+};
+
+// View logs
+async function viewLogs(reqId) {
+    const response = await fetch(`/api/incept/request/${reqId}/logs`);
+    const data = await response.json();
+
+    document.getElementById('logs-title').textContent = `Request #${reqId} Logs`;
+
+    const logsHtml = data.logs.map(log => {
+        const color = {
+            'info': '#94a3b8',
+            'success': '#10b981',
+            'warning': '#fbbf24',
+            'error': '#ef4444'
+        }[log.log_type] || '#94a3b8';
+
+        return `<div style="margin-bottom: 10px; color: ${color};">
+            [${log.timestamp}] [${log.log_type.toUpperCase()}] ${log.message}
+        </div>`;
+    }).join('');
+
+    document.getElementById('logs-content').innerHTML = logsHtml || '<p style="color: #64748b;">No logs yet</p>';
+    document.getElementById('logs-modal').style.display = 'block';
+}
+
+function closeLogs() {
+    document.getElementById('logs-modal').style.display = 'none';
+}
+
+// Cancel request
+async function cancelRequest(reqId) {
+    if (!confirm('Cancel this request?')) return;
+
+    await fetch(`/api/incept/request/${reqId}/cancel`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    });
+
+    location.reload();
+}
+
+// Restart request
+async function restartRequest(reqId) {
+    if (!confirm('Restart this request?')) return;
+
+    await fetch(`/api/incept/request/${reqId}/restart`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    });
+
+    location.reload();
+}
+
+// Auto-refresh pending requests
+setInterval(async () => {
+    const response = await fetch(`/api/incept/requests/${projectId}`);
+    const data = await response.json();
+
+    // Update status badges
+    data.requests.forEach(req => {
+        const row = document.getElementById(`request-${req.id}`);
+        if (row) {
+            const badge = row.querySelector('.badge');
+            if (badge && badge.textContent !== req.status) {
+                location.reload(); // Reload if status changed
+            }
+        }
+    });
+}, 5000); // Check every 5 seconds
+</script>
+{% endblock %}
