@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+
+{% block title %}System Logs - Inception{% endblock %}
+
+{% block extra_css %}
+<style>
+    .log-controls {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .log-controls select {
+        width: auto;
+        min-width: 150px;
+    }
+    .log-viewer {
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 15px;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        max-height: 600px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    .log-entry {
+        margin-bottom: 8px;
+        padding: 8px;
+        border-left: 3px solid #334155;
+        background: #1e293b;
+        border-radius: 4px;
+    }
+    .log-entry.debug { border-left-color: #64748b; }
+    .log-entry.info { border-left-color: #3b82f6; }
+    .log-entry.success { border-left-color: #10b981; }
+    .log-entry.warning { border-left-color: #f59e0b; }
+    .log-entry.error { border-left-color: #ef4444; }
+    .log-entry.critical { border-left-color: #dc2626; }
+    .log-timestamp {
+        color: #64748b;
+        font-size: 12px;
+    }
+    .log-level {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-right: 8px;
+    }
+    .log-level.debug { background: #64748b; }
+    .log-level.info { background: #3b82f6; }
+    .log-level.success { background: #10b981; }
+    .log-level.warning { background: #f59e0b; color: #000; }
+    .log-level.error { background: #ef4444; }
+    .log-level.critical { background: #dc2626; }
+    .log-category {
+        color: #60a5fa;
+        margin-right: 8px;
+    }
+    .log-message {
+        color: #e2e8f0;
+        margin-top: 4px;
+    }
+    .log-details {
+        color: #94a3b8;
+        font-size: 12px;
+        margin-top: 4px;
+        padding-top: 4px;
+        border-top: 1px solid #334155;
+    }
+    .tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #334155;
+    }
+    .tab {
+        padding: 10px 20px;
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+        transition: all 0.2s;
+    }
+    .tab.active {
+        color: #60a5fa;
+        border-bottom-color: #60a5fa;
+    }
+    .tab:hover {
+        color: #60a5fa;
+    }
+    #copyNotification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #10b981;
+        color: white;
+        padding: 15px 20px;
+        border-radius: 6px;
+        display: none;
+        z-index: 1000;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 style="font-size: 28px; color: #60a5fa; margin-bottom: 20px;">System Logs</h1>
+
+<div id="copyNotification">Copied to clipboard!</div>
+
+<div class="tabs">
+    <button class="tab active" onclick="switchTab('database')">Database Logs</button>
+    <button class="tab" onclick="switchTab('files')">Log Files</button>
+</div>
+
+<!-- Database Logs Tab -->
+<div id="databaseTab">
+    <div class="card">
+        <h2>Filters</h2>
+        <div class="log-controls">
+            <div>
+                <label for="levelFilter">Level</label>
+                <select id="levelFilter" onchange="loadLogs()">
+                    <option value="">All Levels</option>
+                    <option value="debug">Debug</option>
+                    <option value="info">Info</option>
+                    <option value="success">Success</option>
+                    <option value="warning">Warning</option>
+                    <option value="error">Error</option>
+                    <option value="critical">Critical</option>
+                </select>
+            </div>
+            <div>
+                <label for="categoryFilter">Category</label>
+                <select id="categoryFilter" onchange="loadLogs()">
+                    <option value="">All Categories</option>
+                    <option value="auth">Auth</option>
+                    <option value="api">API</option>
+                    <option value="project">Project</option>
+                    <option value="incept">Incept</option>
+                    <option value="incept+">Incept+</option>
+                    <option value="render">Render</option>
+                    <option value="git">Git</option>
+                    <option value="system">System</option>
+                </select>
+            </div>
+            <div>
+                <label for="limitFilter">Limit</label>
+                <select id="limitFilter" onchange="loadLogs()">
+                    <option value="100">Last 100</option>
+                    <option value="250">Last 250</option>
+                    <option value="500">Last 500</option>
+                    <option value="1000">Last 1000</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: auto;">
+                <button class="btn btn-primary" onclick="loadLogs()">Refresh</button>
+                <button class="btn btn-secondary" onclick="copyLogs()">Copy All</button>
+                <button class="btn btn-secondary" onclick="clearFilters()">Clear Filters</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Log Entries (<span id="logCount">0</span>)</h2>
+        <div id="logViewer" class="log-viewer">
+            <p style="color: #64748b;">Loading logs...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Log Files Tab -->
+<div id="filesTab" style="display: none;">
+    <div class="card">
+        <h2>Log Files</h2>
+        <div class="log-controls">
+            <div>
+                <label for="fileSelect">Select Log File</label>
+                <select id="fileSelect" onchange="loadLogFile()">
+                    <option value="inception.log">inception.log (All)</option>
+                    <option value="auth.log">auth.log (Authentication)</option>
+                    <option value="api.log">api.log (API Calls)</option>
+                    <option value="errors.log">errors.log (Errors Only)</option>
+                </select>
+            </div>
+            <div>
+                <label for="fileLimitFilter">Lines</label>
+                <select id="fileLimitFilter" onchange="loadLogFile()">
+                    <option value="500">Last 500</option>
+                    <option value="1000" selected>Last 1000</option>
+                    <option value="2000">Last 2000</option>
+                    <option value="5000">Last 5000</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: auto;">
+                <button class="btn btn-primary" onclick="loadLogFile()">Refresh</button>
+                <button class="btn btn-secondary" onclick="copyFileContent()">Copy All</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 id="fileTitle">Log File Content</h2>
+        <div id="fileViewer" class="log-viewer" style="max-height: 700px;">
+            <p style="color: #64748b;">Select a log file to view...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentLogs = [];
+let currentFileContent = '';
+
+// Switch between tabs
+function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    if (tab === 'database') {
+        document.querySelector('.tab:nth-child(1)').classList.add('active');
+        document.getElementById('databaseTab').style.display = 'block';
+        document.getElementById('filesTab').style.display = 'none';
+        loadLogs();
+    } else {
+        document.querySelector('.tab:nth-child(2)').classList.add('active');
+        document.getElementById('databaseTab').style.display = 'none';
+        document.getElementById('filesTab').style.display = 'block';
+        loadLogFile();
+    }
+}
+
+// Load database logs
+async function loadLogs() {
+    const level = document.getElementById('levelFilter').value;
+    const category = document.getElementById('categoryFilter').value;
+    const limit = document.getElementById('limitFilter').value;
+
+    const params = new URLSearchParams({ limit });
+    if (level) params.append('level', level);
+    if (category) params.append('category', category);
+
+    try {
+        const response = await fetch(`/api/logs?${params}`);
+        const data = await response.json();
+
+        if (data.success) {
+            currentLogs = data.logs;
+            displayLogs(data.logs);
+        } else {
+            document.getElementById('logViewer').innerHTML =
+                `<p style="color: #ef4444;">Error loading logs: ${data.error}</p>`;
+        }
+    } catch (error) {
+        document.getElementById('logViewer').innerHTML =
+            `<p style="color: #ef4444;">Error loading logs: ${error.message}</p>`;
+    }
+}
+
+// Display logs in the viewer
+function displayLogs(logs) {
+    const viewer = document.getElementById('logViewer');
+    document.getElementById('logCount').textContent = logs.length;
+
+    if (logs.length === 0) {
+        viewer.innerHTML = '<p style="color: #64748b;">No logs found matching the criteria.</p>';
+        return;
+    }
+
+    const html = logs.map(log => {
+        const level = log.log_type || 'info';
+        const details = log.details ? `<div class="log-details">${escapeHtml(log.details)}</div>` : '';
+
+        return `
+            <div class="log-entry ${level}">
+                <div>
+                    <span class="log-timestamp">${log.created_at}</span>
+                    <span class="log-level ${level}">${level.toUpperCase()}</span>
+                    <span class="log-category">[${log.category}]</span>
+                    ${log.project_id ? `<span style="color: #94a3b8;">(Project #${log.project_id})</span>` : ''}
+                </div>
+                <div class="log-message">${escapeHtml(log.message)}</div>
+                ${details}
+            </div>
+        `;
+    }).join('');
+
+    viewer.innerHTML = html;
+}
+
+// Load log file content
+async function loadLogFile() {
+    const file = document.getElementById('fileSelect').value;
+    const limit = document.getElementById('fileLimitFilter').value;
+
+    document.getElementById('fileViewer').innerHTML = '<p style="color: #64748b;">Loading...</p>';
+
+    try {
+        const response = await fetch(`/api/logs/files?file=${file}&limit=${limit}`);
+        const data = await response.json();
+
+        if (data.success) {
+            currentFileContent = data.content;
+            document.getElementById('fileTitle').textContent = `Log File: ${data.file}`;
+            document.getElementById('fileViewer').textContent = data.content;
+        } else {
+            document.getElementById('fileViewer').innerHTML =
+                `<p style="color: #ef4444;">Error loading file: ${data.error}</p>`;
+        }
+    } catch (error) {
+        document.getElementById('fileViewer').innerHTML =
+            `<p style="color: #ef4444;">Error loading file: ${error.message}</p>`;
+    }
+}
+
+// Copy logs to clipboard
+function copyLogs() {
+    const text = currentLogs.map(log => {
+        let line = `[${log.created_at}] [${log.log_type.toUpperCase()}] [${log.category}] ${log.message}`;
+        if (log.details) {
+            line += `\n    Details: ${log.details}`;
+        }
+        return line;
+    }).join('\n\n');
+
+    copyToClipboard(text);
+}
+
+// Copy file content to clipboard
+function copyFileContent() {
+    copyToClipboard(currentFileContent);
+}
+
+// Helper function to copy text to clipboard
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        const notification = document.getElementById('copyNotification');
+        notification.style.display = 'block';
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 2000);
+    }).catch(err => {
+        alert('Failed to copy to clipboard: ' + err);
+    });
+}
+
+// Clear all filters
+function clearFilters() {
+    document.getElementById('levelFilter').value = '';
+    document.getElementById('categoryFilter').value = '';
+    document.getElementById('limitFilter').value = '100';
+    loadLogs();
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Auto-refresh every 10 seconds
+setInterval(() => {
+    const activeTab = document.querySelector('.tab.active');
+    if (activeTab && activeTab.textContent.includes('Database')) {
+        loadLogs();
+    }
+}, 10000);
+
+// Initial load
+loadLogs();
+</script>
+{% endblock %}
