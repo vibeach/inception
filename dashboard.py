@@ -83,28 +83,33 @@ def new_project():
     """Create a new project."""
     if request.method == 'POST':
         try:
-            # Check if automated creation is requested
-            auto_create = request.form.get('auto_create') == 'on'
+            # Check which automation features are requested
+            auto_create_github = request.form.get('auto_create_github') == 'on'
+            auto_create_render = request.form.get('auto_create_render') == 'on'
 
-            if auto_create:
-                # Automated project creation
+            project_name = request.form['name']
+            description = request.form.get('description')
+            project_type = request.form.get('project_type', 'Flask')
+
+            # PATH 1: Both GitHub and Render automation
+            if auto_create_github and auto_create_render:
                 github_token = request.form.get('github_token') or config.DEFAULT_GITHUB_TOKEN
                 render_api_key = request.form.get('render_api_key') or config.RENDER_API_KEY
                 render_owner_id = request.form.get('render_owner_id') or config.RENDER_OWNER_ID
 
+                # Validation
                 if not github_token:
                     flash('GitHub token required for automated creation', 'error')
                     return render_template('new_project.html')
-
                 if not render_api_key or not render_owner_id:
-                    flash('Render API key and Owner ID required for automated creation', 'error')
+                    flash('Render API key and Owner ID required for automated deployment', 'error')
                     return render_template('new_project.html')
 
-                # Create project automatically
+                # Create both (existing function works for this)
                 success, result = project_automation.create_full_project(
-                    project_name=request.form['name'],
-                    description=request.form.get('description'),
-                    project_type=request.form.get('project_type', 'Flask'),
+                    project_name=project_name,
+                    description=description,
+                    project_type=project_type,
                     github_token=github_token,
                     render_api_key=render_api_key,
                     render_owner_id=render_owner_id,
@@ -115,38 +120,129 @@ def new_project():
                     flash(f'Automated creation failed: {result}', 'error')
                     return render_template('new_project.html')
 
-                # Add to database with automated details
+                # Add to database
                 project_id = database.add_project(
                     name=result['name'],
                     description=result['description'],
                     repo_url=result['repo_url'],
                     repo_branch=result['repo_branch'],
                     github_token=result['github_token'],
-                    local_path=None,  # Render will clone it
+                    local_path=None,
                     render_service_id=result['render_service_id'],
                     render_service_url=result['render_service_url'],
                     project_type=result['project_type']
                 )
 
-                flash(f'Project "{result["name"]}" created and deployed automatically! 🚀', 'success')
+                flash(f'Project "{result["name"]}" created and deployed! 🚀', 'success')
                 flash(f'GitHub: {result["repo_html_url"]}', 'success')
                 flash(f'Render: {result["render_service_url"]}', 'success')
                 return redirect(url_for('project_detail', project_id=project_id))
 
-            else:
-                # Manual project creation
+            # PATH 2: GitHub only automation
+            elif auto_create_github and not auto_create_render:
+                github_token = request.form.get('github_token') or config.DEFAULT_GITHUB_TOKEN
+
+                if not github_token:
+                    flash('GitHub token required for automated repository creation', 'error')
+                    return render_template('new_project.html')
+
+                # Create GitHub repo only
+                success, result = project_automation.create_github_project_only(
+                    project_name=project_name,
+                    description=description,
+                    project_type=project_type,
+                    github_token=github_token,
+                    private=request.form.get('private_repo') == 'on'
+                )
+
+                if not success:
+                    flash(f'GitHub creation failed: {result}', 'error')
+                    return render_template('new_project.html')
+
+                # Add to database (no Render details)
                 project_id = database.add_project(
-                    name=request.form['name'],
-                    description=request.form.get('description'),
-                    repo_url=request.form['repo_url'],
+                    name=result['name'],
+                    description=result['description'],
+                    repo_url=result['repo_url'],
+                    repo_branch=result['repo_branch'],
+                    github_token=result['github_token'],
+                    local_path=request.form.get('local_path'),
+                    render_service_id=request.form.get('render_service_id'),
+                    render_service_url=request.form.get('render_service_url'),
+                    project_type=result['project_type']
+                )
+
+                flash(f'GitHub repository "{result["name"]}" created! 📦', 'success')
+                flash(f'Repository: {result["repo_html_url"]}', 'success')
+                return redirect(url_for('project_detail', project_id=project_id))
+
+            # PATH 3: Render only automation (requires existing repo)
+            elif not auto_create_github and auto_create_render:
+                repo_url = request.form.get('repo_url')
+                if not repo_url:
+                    flash('Repository URL required for Render deployment', 'error')
+                    return render_template('new_project.html')
+
+                github_token = request.form.get('github_token') or config.DEFAULT_GITHUB_TOKEN
+                render_api_key = request.form.get('render_api_key') or config.RENDER_API_KEY
+                render_owner_id = request.form.get('render_owner_id') or config.RENDER_OWNER_ID
+
+                if not render_api_key or not render_owner_id:
+                    flash('Render API key and Owner ID required for automated deployment', 'error')
+                    return render_template('new_project.html')
+
+                # Create Render service only
+                success, result = project_automation.create_render_service_only(
+                    project_name=project_name,
+                    repo_url=repo_url,
+                    description=description,
+                    project_type=project_type,
+                    github_token=github_token,
+                    render_api_key=render_api_key,
+                    render_owner_id=render_owner_id
+                )
+
+                if not success:
+                    flash(f'Render deployment failed: {result}', 'error')
+                    return render_template('new_project.html')
+
+                # Add to database
+                project_id = database.add_project(
+                    name=project_name,
+                    description=description,
+                    repo_url=repo_url,
+                    repo_branch=request.form.get('repo_branch', 'main'),
+                    github_token=github_token,
+                    local_path=request.form.get('local_path'),
+                    render_service_id=result['render_service_id'],
+                    render_service_url=result['render_service_url'],
+                    project_type=project_type
+                )
+
+                flash(f'Project "{project_name}" deployed to Render! 🚀', 'success')
+                flash(f'Render: {result["render_service_url"]}', 'success')
+                return redirect(url_for('project_detail', project_id=project_id))
+
+            # PATH 4: No automation (manual mode)
+            else:
+                # Manual project creation - requires repo_url
+                repo_url = request.form.get('repo_url')
+                if not repo_url:
+                    flash('Repository URL is required', 'error')
+                    return render_template('new_project.html')
+
+                project_id = database.add_project(
+                    name=project_name,
+                    description=description,
+                    repo_url=repo_url,
                     repo_branch=request.form.get('repo_branch', 'main'),
                     github_token=request.form.get('github_token') or config.DEFAULT_GITHUB_TOKEN,
                     local_path=request.form.get('local_path'),
                     render_service_id=request.form.get('render_service_id'),
                     render_service_url=request.form.get('render_service_url'),
-                    project_type=request.form.get('project_type')
+                    project_type=project_type
                 )
-                flash(f'Project "{request.form["name"]}" created successfully!', 'success')
+                flash(f'Project "{project_name}" created successfully!', 'success')
                 return redirect(url_for('project_detail', project_id=project_id))
 
         except Exception as e:
@@ -300,6 +396,42 @@ def api_incept_request_logs(req_id):
     """Get logs for a request."""
     logs = database.get_claude_logs(req_id)
     return jsonify({'success': True, 'logs': logs})
+
+
+@app.route('/api/incept/request/<int:req_id>/full-log')
+@login_required
+def api_incept_request_full_log(req_id):
+    """Get full detailed log file for a request."""
+    # Get the request to find the project
+    req = database.get_claude_request(req_id)
+    if not req:
+        return jsonify({'success': False, 'error': 'Request not found'}), 404
+
+    # Get project to find the log file
+    project = database.get_project(req['project_id'])
+    if not project or not project['local_path']:
+        return jsonify({'success': False, 'error': 'Project not found'}), 404
+
+    # Build log file path
+    log_file = os.path.join(project['local_path'], 'inception_logs', f'request_{req_id}.log')
+
+    if not os.path.exists(log_file):
+        return jsonify({'success': False, 'error': 'Log file not found'}), 404
+
+    try:
+        with open(log_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Get relative path for display
+        rel_path = os.path.relpath(log_file, project['local_path'])
+
+        return jsonify({
+            'success': True,
+            'content': content,
+            'log_file': rel_path
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/incept/request/<int:req_id>/cancel', methods=['POST'])

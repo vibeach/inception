@@ -92,7 +92,15 @@
     <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; max-width: 900px; margin: 0 auto; max-height: 80vh; display: flex; flex-direction: column;">
         <div style="padding: 20px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
             <h2 id="logs-title" style="color: #60a5fa;">Request Logs</h2>
-            <button onclick="closeLogs()" class="btn btn-secondary">Close</button>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="copyFullLog()" class="btn btn-primary" id="copy-log-btn" style="display: none;">
+                    📋 Copy Full Log
+                </button>
+                <button onclick="closeLogs()" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+        <div id="log-file-info" style="padding: 10px 20px; background: #0f172a; border-bottom: 1px solid #334155; font-size: 12px; color: #94a3b8; display: none;">
+            <!-- Log file path will be shown here -->
         </div>
         <div id="logs-content" style="padding: 20px; overflow-y: auto; flex: 1; font-family: monospace; font-size: 13px;">
             <!-- Logs will be inserted here -->
@@ -133,8 +141,13 @@ document.getElementById('request-form').onsubmit = async (e) => {
     }
 };
 
+// Store current request ID for copying
+let currentReqId = null;
+let fullLogContent = null;
+
 // View logs
 async function viewLogs(reqId) {
+    currentReqId = reqId;
     const response = await fetch(`/api/incept/request/${reqId}/logs`);
     const data = await response.json();
 
@@ -145,7 +158,8 @@ async function viewLogs(reqId) {
             'info': '#94a3b8',
             'success': '#10b981',
             'warning': '#fbbf24',
-            'error': '#ef4444'
+            'error': '#ef4444',
+            'debug': '#8b5cf6'
         }[log.log_type] || '#94a3b8';
 
         return `<div style="margin-bottom: 10px; color: ${color};">
@@ -154,11 +168,57 @@ async function viewLogs(reqId) {
     }).join('');
 
     document.getElementById('logs-content').innerHTML = logsHtml || '<p style="color: #64748b;">No logs yet</p>';
+
+    // Try to fetch full log file
+    try {
+        const fullLogResponse = await fetch(`/api/incept/request/${reqId}/full-log`);
+        if (fullLogResponse.ok) {
+            const fullLogData = await fullLogResponse.json();
+            fullLogContent = fullLogData.content;
+
+            if (fullLogData.log_file) {
+                document.getElementById('log-file-info').style.display = 'block';
+                document.getElementById('log-file-info').innerHTML = `
+                    📁 Detailed log saved to: <code style="color: #60a5fa;">${fullLogData.log_file}</code>
+                `;
+                document.getElementById('copy-log-btn').style.display = 'block';
+            }
+        }
+    } catch (e) {
+        // No full log available yet
+        fullLogContent = null;
+        document.getElementById('log-file-info').style.display = 'none';
+        document.getElementById('copy-log-btn').style.display = 'none';
+    }
+
     document.getElementById('logs-modal').style.display = 'block';
+}
+
+async function copyFullLog() {
+    if (!fullLogContent) {
+        alert('Full log not available');
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(fullLogContent);
+        const btn = document.getElementById('copy-log-btn');
+        const originalText = btn.textContent;
+        btn.textContent = '✅ Copied!';
+        btn.style.background = '#10b981';
+        setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.background = '';
+        }, 2000);
+    } catch (err) {
+        alert('Failed to copy log to clipboard');
+    }
 }
 
 function closeLogs() {
     document.getElementById('logs-modal').style.display = 'none';
+    currentReqId = null;
+    fullLogContent = null;
 }
 
 // Cancel request

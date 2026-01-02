@@ -14,6 +14,7 @@ import sys
 import os
 import json
 import glob as glob_module
+from datetime import datetime
 
 # Add current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -23,6 +24,127 @@ import database
 import dynamic_config
 
 POLL_INTERVAL = 5  # seconds between checks
+
+
+class DetailedLogger:
+    """Handles detailed logging to both database and file."""
+
+    def __init__(self, req_id, project_path, project_name):
+        self.req_id = req_id
+        self.project_path = project_path
+        self.project_name = project_name
+        self.log_lines = []
+
+        # Create inception_logs directory in project
+        self.log_dir = os.path.join(project_path, 'inception_logs')
+        os.makedirs(self.log_dir, exist_ok=True)
+
+        # Log file path
+        self.log_file = os.path.join(self.log_dir, f'request_{req_id}.log')
+
+        # Initialize log file
+        self.write_header()
+
+    def write_header(self):
+        """Write log file header."""
+        header = f"""
+{'='*80}
+INCEPTION REQUEST LOG
+{'='*80}
+Request ID: {self.req_id}
+Project: {self.project_name}
+Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Log File: {self.log_file}
+{'='*80}
+
+"""
+        self.log_lines.append(header)
+        self._write_to_file(header)
+
+    def log(self, message, level='info', to_db=True, details=None):
+        """Log a message to both file and database."""
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        level_marker = {
+            'info': 'ℹ️',
+            'success': '✅',
+            'warning': '⚠️',
+            'error': '❌',
+            'debug': '🔍'
+        }.get(level, '•')
+
+        # Format log line
+        log_line = f"[{timestamp}] {level_marker} [{level.upper()}] {message}\n"
+
+        # Add details if provided
+        if details:
+            log_line += f"    Details: {json.dumps(details, indent=2)}\n"
+
+        self.log_lines.append(log_line)
+        self._write_to_file(log_line)
+
+        # Also log to database
+        if to_db:
+            database.add_claude_log(self.req_id, message, level)
+
+    def log_tool_call(self, tool_name, tool_input, result):
+        """Log a tool call with full details."""
+        self.log(f"Tool Call: {tool_name}", 'debug', to_db=False)
+
+        details_block = f"""
+    Tool: {tool_name}
+    Input: {json.dumps(tool_input, indent=6)}
+    Result: {result[:500]}{'...' if len(result) > 500 else ''}
+"""
+        self._write_to_file(details_block)
+
+        # Simpler message to DB
+        database.add_claude_log(self.req_id, f"Tool: {tool_name} - {tool_input.get('path', 'N/A')}", 'debug')
+
+    def log_api_response(self, iteration, response):
+        """Log API response details."""
+        usage = response.usage if hasattr(response, 'usage') else None
+        stop_reason = response.stop_reason if hasattr(response, 'stop_reason') else 'unknown'
+
+        self.log(f"Iteration {iteration}: API Response (stop_reason={stop_reason})", 'debug', to_db=False)
+
+        if usage:
+            tokens_msg = f"Tokens: {usage.input_tokens} in, {usage.output_tokens} out"
+            self.log(tokens_msg, 'debug', to_db=False)
+
+        # Log content blocks
+        if hasattr(response, 'content'):
+            for i, block in enumerate(response.content):
+                if hasattr(block, 'text'):
+                    self._write_to_file(f"    Text Block {i}: {block.text[:200]}...\n")
+                elif hasattr(block, 'type') and block.type == 'tool_use':
+                    self._write_to_file(f"    Tool Use Block {i}: {block.name}\n")
+
+    def finalize(self, status, summary):
+        """Write final summary to log."""
+        footer = f"""
+{'='*80}
+FINAL STATUS: {status.upper()}
+{'='*80}
+{summary}
+
+Completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Log saved to: {self.log_file}
+{'='*80}
+"""
+        self.log_lines.append(footer)
+        self._write_to_file(footer)
+
+    def _write_to_file(self, content):
+        """Write content to log file."""
+        try:
+            with open(self.log_file, 'a', encoding='utf-8') as f:
+                f.write(content)
+        except Exception as e:
+            print(f"Error writing to log file: {e}")
+
+    def get_log_path(self):
+        """Return the relative path to the log file from project root."""
+        return os.path.relpath(self.log_file, self.project_path)
 
 # Define tools for Claude to use
 TOOLS = [
@@ -116,16 +238,22 @@ TOOLS = [
 ]
 
 
-def execute_tool(tool_name, tool_input, req_id, project_path):
+def execute_tool(tool_name, tool_input, req_id, project_path, logger=None):
     """Execute a tool and return the result."""
     try:
         if tool_name == "read_file":
             path = os.path.join(project_path, tool_input["path"])
             if not os.path.exists(path):
-                return f"Error: File not found: {tool_input['path']}"
+                result = f"Error: File not found: {tool_input['path']}"
+                if logger:
+                    logger.log_tool_call(tool_name, tool_input, result)
+                return result
             with open(path, 'r') as f:
                 content = f.read()
-            return f"Contents of {tool_input['path']}:\n{content}"
+            result = f"Contents of {tool_input['path']}:\n{content}"
+            if logger:
+                logger.log_tool_call(tool_name, tool_input, f"Read {len(content)} chars from {tool_input['path']}")
+            return result
 
         elif tool_name == "write_file":
             path = os.path.join(project_path, tool_input["path"])
@@ -133,49 +261,79 @@ def execute_tool(tool_name, tool_input, req_id, project_path):
             os.makedirs(os.path.dirname(path) if os.path.dirname(path) else '.', exist_ok=True)
             with open(path, 'w') as f:
                 f.write(tool_input["content"])
+            result = f"Successfully wrote {len(tool_input['content'])} characters to {tool_input['path']}"
+            if logger:
+                logger.log(f"✏️ Wrote file: {tool_input['path']} ({len(tool_input['content'])} chars)", 'success')
+                logger.log_tool_call(tool_name, tool_input, result)
             database.add_claude_log(req_id, f"Wrote file: {tool_input['path']}", 'info')
-            return f"Successfully wrote {len(tool_input['content'])} characters to {tool_input['path']}"
+            return result
 
         elif tool_name == "edit_file":
             path = os.path.join(project_path, tool_input["path"])
             if not os.path.exists(path):
-                return f"Error: File not found: {tool_input['path']}"
+                result = f"Error: File not found: {tool_input['path']}"
+                if logger:
+                    logger.log_tool_call(tool_name, tool_input, result)
+                return result
             with open(path, 'r') as f:
                 content = f.read()
             old_string = tool_input["old_string"]
             new_string = tool_input["new_string"]
             if old_string not in content:
-                return f"Error: Could not find the specified string in {tool_input['path']}. The string to replace was not found."
+                result = f"Error: Could not find the specified string in {tool_input['path']}. The string to replace was not found."
+                if logger:
+                    logger.log_tool_call(tool_name, tool_input, result)
+                return result
             if content.count(old_string) > 1:
-                return f"Error: The string appears {content.count(old_string)} times in the file. Please provide a more unique string to replace."
+                result = f"Error: The string appears {content.count(old_string)} times in the file. Please provide a more unique string to replace."
+                if logger:
+                    logger.log_tool_call(tool_name, tool_input, result)
+                return result
             new_content = content.replace(old_string, new_string, 1)
             with open(path, 'w') as f:
                 f.write(new_content)
+            result = f"Successfully edited {tool_input['path']}"
+            if logger:
+                logger.log(f"✏️ Edited file: {tool_input['path']}", 'success')
+                logger.log_tool_call(tool_name, tool_input, result)
             database.add_claude_log(req_id, f"Edited file: {tool_input['path']}", 'info')
-            return f"Successfully edited {tool_input['path']}"
+            return result
 
         elif tool_name == "list_files":
             pattern = tool_input["pattern"]
             files = glob_module.glob(os.path.join(project_path, pattern), recursive=True)
             # Make paths relative
             files = [os.path.relpath(f, project_path) for f in files]
-            return f"Files matching '{pattern}':\n" + "\n".join(files) if files else f"No files found matching '{pattern}'"
+            result = f"Files matching '{pattern}':\n" + "\n".join(files) if files else f"No files found matching '{pattern}'"
+            if logger:
+                logger.log_tool_call(tool_name, tool_input, f"Found {len(files)} files")
+            return result
 
         elif tool_name == "log_progress":
             level = tool_input.get("level", "info")
             database.add_claude_log(req_id, tool_input["message"], level)
+            if logger:
+                logger.log(f"📝 {tool_input['message']}", level)
             return "Logged successfully"
 
         else:
-            return f"Unknown tool: {tool_name}"
+            result = f"Unknown tool: {tool_name}"
+            if logger:
+                logger.log(result, 'error')
+            return result
 
     except Exception as e:
-        return f"Error executing {tool_name}: {str(e)}"
+        result = f"Error executing {tool_name}: {str(e)}"
+        if logger:
+            logger.log(result, 'error')
+        return result
 
 
-def git_commit_and_push(req_id, project_path, repo_url, repo_branch, github_token, commit_message=None):
+def git_commit_and_push(req_id, project_path, repo_url, repo_branch, github_token, commit_message=None, logger=None):
     """Commit and push changes to git after making modifications."""
     try:
+        if logger:
+            logger.log("Starting git commit and push process", 'info')
         # Check if there are any changes
         status_result = subprocess.run(
             ['git', 'status', '--porcelain'],
@@ -186,11 +344,19 @@ def git_commit_and_push(req_id, project_path, repo_url, repo_branch, github_toke
         )
 
         if not status_result.stdout.strip():
-            database.add_claude_log(req_id, 'No changes to commit', 'info')
+            msg = 'No changes to commit'
+            database.add_claude_log(req_id, msg, 'info')
+            if logger:
+                logger.log(msg, 'info')
             return True
 
         changes = status_result.stdout.strip().split('\n')
-        database.add_claude_log(req_id, f'Found {len(changes)} changed file(s), committing...', 'info')
+        msg = f'Found {len(changes)} changed file(s), committing...'
+        database.add_claude_log(req_id, msg, 'info')
+        if logger:
+            logger.log(msg, 'info')
+            for change in changes:
+                logger.log(f"  {change}", 'debug', to_db=False)
 
         # Configure git identity
         subprocess.run(['git', 'config', 'user.email', 'incept@inception-system.local'],
@@ -208,7 +374,10 @@ def git_commit_and_push(req_id, project_path, repo_url, repo_branch, github_toke
         )
 
         if add_result.returncode != 0:
-            database.add_claude_log(req_id, f'Git add failed: {add_result.stderr}', 'error')
+            msg = f'Git add failed: {add_result.stderr}'
+            database.add_claude_log(req_id, msg, 'error')
+            if logger:
+                logger.log(msg, 'error')
             return False
 
         # Commit
@@ -222,8 +391,14 @@ def git_commit_and_push(req_id, project_path, repo_url, repo_branch, github_toke
         )
 
         if commit_result.returncode != 0 and 'nothing to commit' not in commit_result.stdout:
-            database.add_claude_log(req_id, f'Git commit failed: {commit_result.stderr}', 'error')
+            error_msg = f'Git commit failed: {commit_result.stderr}'
+            database.add_claude_log(req_id, error_msg, 'error')
+            if logger:
+                logger.log(error_msg, 'error')
             return False
+
+        if logger and 'nothing to commit' not in commit_result.stdout:
+            logger.log(f"Committed: {msg}", 'success')
 
         # Check if origin remote exists, configure if needed
         remote_check = subprocess.run(
@@ -264,7 +439,12 @@ def git_commit_and_push(req_id, project_path, repo_url, repo_branch, github_toke
         else:
             push_cmd = ['git', 'push', 'origin', f'HEAD:{target_branch}']
 
-        database.add_claude_log(req_id, 'Pushing to remote (will trigger redeploy if connected to Render)...', 'info')
+        push_msg = 'Pushing to remote (will trigger redeploy if connected to Render)...'
+        database.add_claude_log(req_id, push_msg, 'info')
+        if logger:
+            logger.log(push_msg, 'info')
+            logger.log(f"Push command: {' '.join(push_cmd)}", 'debug', to_db=False)
+
         push_result = subprocess.run(
             push_cmd,
             cwd=project_path,
@@ -276,12 +456,21 @@ def git_commit_and_push(req_id, project_path, repo_url, repo_branch, github_toke
         if push_result.returncode != 0:
             error_msg = push_result.stderr
             if 'Authentication failed' in error_msg or 'could not read Username' in error_msg:
-                database.add_claude_log(req_id, 'Git push auth failed. Check GitHub token for this project.', 'error')
+                msg = 'Git push auth failed. Check GitHub token for this project.'
+                database.add_claude_log(req_id, msg, 'error')
+                if logger:
+                    logger.log(msg, 'error')
             else:
-                database.add_claude_log(req_id, f'Git push failed: {error_msg}', 'error')
+                msg = f'Git push failed: {error_msg}'
+                database.add_claude_log(req_id, msg, 'error')
+                if logger:
+                    logger.log(msg, 'error')
             return False
 
-        database.add_claude_log(req_id, 'Changes pushed to git successfully', 'success')
+        success_msg = 'Changes pushed to git successfully'
+        database.add_claude_log(req_id, success_msg, 'success')
+        if logger:
+            logger.log(f"✅ {success_msg}", 'success')
         return True
 
     except subprocess.TimeoutExpired:
@@ -338,6 +527,10 @@ def process_with_api(req, project):
     request_text = req['text']
     project_path = project['local_path']
 
+    # Create detailed logger
+    logger = DetailedLogger(req_id, project_path, project['name'])
+    logger.log(f"Request: {request_text}", 'info')
+
     # Get settings for this project
     settings = database.get_incept_settings(project['id'])
     model = req.get('model') or settings.get('model', 'claude-sonnet-4-20250514')
@@ -351,6 +544,7 @@ def process_with_api(req, project):
     print(f"{'='*60}\n")
 
     database.update_claude_request(req_id, 'processing')
+    logger.log(f'Processing via API with model: {model}', 'info')
     database.add_claude_log(req_id, f'Processing via API with model: {model}', 'info')
 
     # System prompt for tool use - loaded from dynamic config (hot-reloadable!)
@@ -370,6 +564,7 @@ Start by reading relevant files to understand the current code, then make the ne
         client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
         messages = [{"role": "user", "content": user_message}]
 
+        logger.log('Starting agentic loop with tools...', 'info')
         database.add_claude_log(req_id, 'Starting agentic loop with tools...', 'info')
 
         total_input_tokens = 0
@@ -381,6 +576,7 @@ Start by reading relevant files to understand the current code, then make the ne
         while iteration < max_iterations:
             iteration += 1
             print(f"  Iteration {iteration}...")
+            logger.log(f"=== Iteration {iteration} ===", 'debug', to_db=False)
 
             response = client.messages.create(
                 model=model,
@@ -394,6 +590,9 @@ Start by reading relevant files to understand the current code, then make the ne
             total_input_tokens += response.usage.input_tokens if response.usage else 0
             total_output_tokens += response.usage.output_tokens if response.usage else 0
 
+            # Log API response details
+            logger.log_api_response(iteration, response)
+
             # Check if we're done (no more tool use)
             if response.stop_reason == "end_turn":
                 # Extract final text response
@@ -402,12 +601,16 @@ Start by reading relevant files to understand the current code, then make the ne
                     if hasattr(block, 'text'):
                         final_text += block.text
 
+                logger.log(f'✅ Completed after {iteration} iterations', 'success')
+                logger.log(f'Total tokens: {total_input_tokens} in, {total_output_tokens} out', 'info')
                 database.add_claude_log(req_id, f'Completed after {iteration} iterations', 'success')
                 database.add_claude_log(req_id, f'Tokens: {total_input_tokens} in, {total_output_tokens} out', 'info')
 
                 summary = f"Changes made:\n" + "\n".join(changes_made) if changes_made else "No file changes made"
                 summary += f"\n\nFinal response:\n{final_text[:1000]}"
+                summary += f"\n\nDetailed log: {logger.get_log_path()}"
 
+                logger.finalize('completed', summary)
                 database.update_claude_request(req_id, 'completed', summary)
 
                 # Auto-commit and push changes to git if files were modified and auto_push is enabled
@@ -420,10 +623,13 @@ Start by reading relevant files to understand the current code, then make the ne
                             project['repo_url'],
                             project['repo_branch'],
                             project['github_token'],
-                            f'Incept #{req_id}: {request_text[:50]}'
+                            f'Incept #{req_id}: {request_text[:50]}',
+                            logger=logger
                         )
                     else:
-                        database.add_claude_log(req_id, 'Changes made but not pushed (auto_push disabled). Use push button to push manually.', 'info')
+                        msg = 'Changes made but not pushed (auto_push disabled). Use push button to push manually.'
+                        logger.log(msg, 'info')
+                        database.add_claude_log(req_id, msg, 'info')
 
                 print(f"Request #{req_id} completed via API")
                 return True
@@ -439,7 +645,7 @@ Start by reading relevant files to understand the current code, then make the ne
                     tool_id = block.id
 
                     print(f"    Tool: {tool_name}")
-                    result = execute_tool(tool_name, tool_input, req_id, project_path)
+                    result = execute_tool(tool_name, tool_input, req_id, project_path, logger=logger)
 
                     # Track file changes
                     if tool_name in ("write_file", "edit_file") and "Successfully" in result:
@@ -456,8 +662,14 @@ Start by reading relevant files to understand the current code, then make the ne
             messages.append({"role": "user", "content": tool_results})
 
         # Max iterations reached
-        database.add_claude_log(req_id, f'Max iterations ({max_iterations}) reached', 'warning')
-        database.update_claude_request(req_id, 'completed', f'Completed with {len(changes_made)} changes (max iterations reached)')
+        msg = f'Max iterations ({max_iterations}) reached'
+        logger.log(msg, 'warning')
+        database.add_claude_log(req_id, msg, 'warning')
+
+        summary = f'Completed with {len(changes_made)} changes (max iterations reached)'
+        summary += f"\n\nDetailed log: {logger.get_log_path()}"
+        logger.finalize('completed', summary)
+        database.update_claude_request(req_id, 'completed', summary)
 
         # Auto-commit and push changes to git if files were modified and auto_push is enabled
         if changes_made:
@@ -469,15 +681,21 @@ Start by reading relevant files to understand the current code, then make the ne
                     project['repo_url'],
                     project['repo_branch'],
                     project['github_token'],
-                    f'Incept #{req_id}: {request_text[:50]}'
+                    f'Incept #{req_id}: {request_text[:50]}',
+                    logger=logger
                 )
             else:
-                database.add_claude_log(req_id, 'Changes made but not pushed (auto_push disabled). Use push button to push manually.', 'info')
+                msg = 'Changes made but not pushed (auto_push disabled). Use push button to push manually.'
+                logger.log(msg, 'info')
+                database.add_claude_log(req_id, msg, 'info')
 
         return True
 
     except Exception as e:
         error_msg = f'Error: {str(e)}'
+        if 'logger' in locals():
+            logger.log(error_msg, 'error')
+            logger.finalize('error', error_msg)
         database.add_claude_log(req_id, error_msg, 'error')
         database.update_claude_request(req_id, 'error', error_msg)
         print(f"Request #{req_id} failed: {error_msg}")
