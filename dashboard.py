@@ -86,8 +86,10 @@ def new_project():
     if request.method == 'POST':
         try:
             # Check which automation features are requested
-            auto_create_github = request.form.get('auto_create_github') == 'on'
-            auto_create_render = request.form.get('auto_create_render') == 'on'
+            # Support both single "auto_create" checkbox and separate checkboxes
+            auto_create_both = request.form.get('auto_create') == 'on'
+            auto_create_github = auto_create_both or request.form.get('auto_create_github') == 'on'
+            auto_create_render = auto_create_both or request.form.get('auto_create_render') == 'on'
 
             project_name = request.form['name']
             description = request.form.get('description')
