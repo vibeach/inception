@@ -342,10 +342,16 @@ def incept(project_id):
     requests_list = database.get_claude_requests(project_id, limit=50)
     settings = database.get_incept_settings(project_id)
 
+    # Check for available credentials
+    has_api_key = bool(config.ANTHROPIC_API_KEY)
+    has_oauth_token = bool(os.environ.get('CLAUDE_CODE_OAUTH_TOKEN') or config.CLAUDE_CODE_OAUTH_TOKEN)
+
     return render_template('incept.html',
                          project=project,
                          requests=requests_list,
-                         settings=settings)
+                         settings=settings,
+                         has_api_key=has_api_key,
+                         has_oauth_token=has_oauth_token)
 
 
 @app.route('/api/incept/request', methods=['POST'])
@@ -503,12 +509,22 @@ def incept_plus(project_id):
     settings = database.get_incept_plus_settings(project_id)
     auto_session = database.get_active_incept_auto_session(project_id)
 
+    # Check for available credentials
+    has_api_key = bool(config.ANTHROPIC_API_KEY)
+    has_oauth_token = bool(os.environ.get('CLAUDE_CODE_OAUTH_TOKEN') or config.CLAUDE_CODE_OAUTH_TOKEN)
+
+    # Also get incept settings for mode
+    incept_settings = database.get_incept_settings(project_id)
+
     return render_template('incept_plus.html',
                          project=project,
                          suggestions=suggestions,
                          improvements=improvements,
                          settings=settings,
-                         auto_session=auto_session)
+                         incept_settings=incept_settings,
+                         auto_session=auto_session,
+                         has_api_key=has_api_key,
+                         has_oauth_token=has_oauth_token)
 
 
 @app.route('/api/incept-plus/suggest', methods=['POST'])

@@ -17,7 +17,22 @@
             <textarea id="request-text" rows="4" placeholder="Example: Add a dark mode toggle to the settings page"></textarea>
         </div>
 
-        <div class="grid grid-2">
+        <div class="grid grid-2" style="margin-bottom: 15px;">
+            <div class="form-group">
+                <label>Processing Mode</label>
+                <div style="display: flex; gap: 0; border-radius: 6px; overflow: hidden; border: 1px solid #334155;">
+                    <button type="button" class="mode-btn {% if settings.mode == 'api' %}active{% endif %}" data-mode="api" title="Uses API credits" style="flex: 1; padding: 10px; border: none; background: {% if settings.mode == 'api' %}#60a5fa{% else %}#0f172a{% endif %}; color: white; cursor: pointer;">
+                        API
+                    </button>
+                    <button type="button" class="mode-btn {% if settings.mode == 'cli_token' %}active{% endif %}" data-mode="cli_token" title="Uses Claude Code OAuth (Max subscription)" style="flex: 1; padding: 10px; border: none; border-left: 1px solid #334155; background: {% if settings.mode == 'cli_token' %}#60a5fa{% else %}#0f172a{% endif %}; color: white; cursor: pointer;">
+                        CLI Token
+                    </button>
+                </div>
+                <div style="font-size: 11px; color: #94a3b8; margin-top: 5px;">
+                    API Key: {% if has_api_key %}<span style="color: #10b981;">✓</span>{% else %}<span style="color: #ef4444;">✗</span>{% endif %} |
+                    OAuth Token: {% if has_oauth_token %}<span style="color: #10b981;">✓</span>{% else %}<span style="color: #ef4444;">✗</span>{% endif %}
+                </div>
+            </div>
             <div class="form-group">
                 <label for="model">Model</label>
                 <select id="model">
@@ -25,12 +40,13 @@
                     <option value="claude-opus-4-20250514" {% if settings.model == 'claude-opus-4-20250514' %}selected{% endif %}>Claude Opus 4</option>
                 </select>
             </div>
-            <div class="form-group">
-                <label for="auto-push">
-                    <input type="checkbox" id="auto-push" checked style="width: auto; margin-right: 5px;">
-                    Auto-push to git
-                </label>
-            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="auto-push">
+                <input type="checkbox" id="auto-push" checked style="width: auto; margin-right: 5px;">
+                Auto-push to git
+            </label>
         </div>
 
         <button type="submit" class="btn btn-primary">Submit Request</button>
@@ -111,6 +127,43 @@
 <script>
 const projectId = {{ project.id }};
 
+// Mode button handling
+document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+        const mode = this.dataset.mode;
+
+        // Update UI
+        document.querySelectorAll('.mode-btn').forEach(b => {
+            b.classList.remove('active');
+            b.style.background = '#0f172a';
+        });
+        this.classList.add('active');
+        this.style.background = '#60a5fa';
+
+        // Save to backend
+        await saveSettings();
+    });
+});
+
+// Save settings
+async function saveSettings() {
+    const mode = document.querySelector('.mode-btn.active').dataset.mode;
+    const model = document.getElementById('model').value;
+
+    try {
+        await fetch(`/api/incept/settings/${projectId}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ mode, model })
+        });
+    } catch (err) {
+        console.error('Failed to save settings:', err);
+    }
+}
+
+// Model change
+document.getElementById('model').addEventListener('change', saveSettings);
+
 // Submit request
 document.getElementById('request-form').onsubmit = async (e) => {
     e.preventDefault();
@@ -121,12 +174,15 @@ document.getElementById('request-form').onsubmit = async (e) => {
         return;
     }
 
+    const mode = document.querySelector('.mode-btn.active').dataset.mode;
+
     const response = await fetch('/api/incept/request', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
             project_id: projectId,
             text: text,
+            mode: mode,
             model: document.getElementById('model').value,
             auto_push: document.getElementById('auto-push').checked
         })

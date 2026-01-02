@@ -704,6 +704,38 @@ Start by reading relevant files to understand the current code, then make the ne
         return False
 
 
+def process_with_cli_token(req, project):
+    """Process request using Claude CLI with OAuth token.
+
+    This uses your Claude Code OAuth token (Max subscription - unlimited usage)
+    instead of API credits. The OAuth token should be set in environment or config.
+    """
+    # Check for OAuth token (env var takes priority, then config.py)
+    oauth_token = os.environ.get('CLAUDE_CODE_OAUTH_TOKEN') or getattr(config, 'CLAUDE_CODE_OAUTH_TOKEN', '')
+    if not oauth_token:
+        database.add_claude_log(req['id'], 'CLAUDE_CODE_OAUTH_TOKEN not set. Set it in environment or config.py', 'error')
+        database.update_claude_request(req['id'], 'error', 'CLAUDE_CODE_OAUTH_TOKEN not configured')
+        return False
+
+    # Ensure the token is in environment for the subprocess
+    os.environ['CLAUDE_CODE_OAUTH_TOKEN'] = oauth_token
+
+    # IMPORTANT: Remove API key from environment to ensure CLI uses OAuth token
+    # and NOT API credits
+    saved_api_key = os.environ.pop('ANTHROPIC_API_KEY', None)
+
+    database.add_claude_log(req['id'], 'Using CLI with OAuth token (Max subscription - no API credits used)', 'info')
+
+    try:
+        # Use the same process_with_api but with OAuth token set
+        # The CLI will automatically use the token from environment
+        return process_with_api(req, project)
+    finally:
+        # Restore API key for other modes
+        if saved_api_key:
+            os.environ['ANTHROPIC_API_KEY'] = saved_api_key
+
+
 def process_request(req):
     """Process a single request based on request's mode or project settings."""
     # Get project info
@@ -725,10 +757,12 @@ def process_request(req):
 
     if mode == 'api':
         return process_with_api(req, project)
+    elif mode == 'cli_token':
+        return process_with_cli_token(req, project)
     else:
-        # CLI mode not implemented for multi-project yet
-        database.add_claude_log(req['id'], 'CLI mode not yet supported for multi-project', 'error')
-        database.update_claude_request(req['id'], 'error', 'CLI mode not supported')
+        # Other CLI modes not implemented for multi-project yet
+        database.add_claude_log(req['id'], f'Mode "{mode}" not yet supported', 'error')
+        database.update_claude_request(req['id'], 'error', f'Mode "{mode}" not supported')
         return False
 
 

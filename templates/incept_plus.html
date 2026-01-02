@@ -28,6 +28,24 @@
 <div id="content-generate" class="tab-content">
     <div class="card">
         <h2>Generate Improvement Suggestions</h2>
+
+        <!-- Mode Selector -->
+        <div style="margin: 15px 0; padding: 15px; background: #0f172a; border: 1px solid #334155; border-radius: 6px;">
+            <label style="display: block; margin-bottom: 8px; color: #e2e8f0; font-size: 14px; font-weight: 500;">Processing Mode</label>
+            <div style="display: flex; gap: 0; border-radius: 6px; overflow: hidden; border: 1px solid #334155; margin-bottom: 10px;">
+                <button type="button" class="mode-btn {% if incept_settings.mode == 'api' or not incept_settings.mode %}active{% endif %}" data-mode="api" title="Uses API credits" style="flex: 1; padding: 10px; border: none; background: {% if incept_settings.mode == 'api' or not incept_settings.mode %}#60a5fa{% else %}#1e293b{% endif %}; color: white; cursor: pointer;">
+                    API
+                </button>
+                <button type="button" class="mode-btn {% if incept_settings.mode == 'cli_token' %}active{% endif %}" data-mode="cli_token" title="Uses Claude Code OAuth (Max subscription)" style="flex: 1; padding: 10px; border: none; border-left: 1px solid #334155; background: {% if incept_settings.mode == 'cli_token' %}#60a5fa{% else %}#1e293b{% endif %}; color: white; cursor: pointer;">
+                    CLI Token
+                </button>
+            </div>
+            <div style="font-size: 11px; color: #94a3b8;">
+                API Key: {% if has_api_key %}<span style="color: #10b981;">✓</span>{% else %}<span style="color: #ef4444;">✗</span>{% endif %} |
+                OAuth Token: {% if has_oauth_token %}<span style="color: #10b981;">✓</span>{% else %}<span style="color: #ef4444;">✗</span>{% endif %}
+            </div>
+        </div>
+
         <form id="generate-form" style="margin-top: 15px;">
             <div class="form-group">
                 <label for="direction">Direction / Focus Area</label>
@@ -205,6 +223,37 @@
 
 <script>
 const projectId = {{ project.id }};
+
+// Mode button handling
+document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+        const mode = this.dataset.mode;
+
+        // Update UI
+        document.querySelectorAll('.mode-btn').forEach(b => {
+            b.classList.remove('active');
+            b.style.background = '#1e293b';
+        });
+        this.classList.add('active');
+        this.style.background = '#60a5fa';
+
+        // Save to backend
+        await saveInceptSettings(mode);
+    });
+});
+
+// Save incept settings
+async function saveInceptSettings(mode) {
+    try {
+        await fetch(`/api/incept/settings/${projectId}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ mode })
+        });
+    } catch (err) {
+        console.error('Failed to save settings:', err);
+    }
+}
 
 function showTab(name) {
     // Hide all content
