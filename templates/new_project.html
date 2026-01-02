@@ -121,19 +121,19 @@ function toggleAutoCreate() {
     const manualFields = document.getElementById('manual-fields');
     const submitBtn = document.getElementById('submit-btn');
 
-    // Required fields
-    const repoUrl = document.getElementById('repo_url');
-    const localPath = document.getElementById('local_path');
-    const renderServiceId = document.getElementById('render_service_id');
-    const renderServiceUrl = document.getElementById('render_service_url');
+    // Get all input fields in manual section
+    const manualInputs = manualFields.querySelectorAll('input, select, textarea');
 
     if (autoCreate) {
         // Show auto-create fields, hide manual fields
         autoFields.style.display = 'block';
         manualFields.style.display = 'none';
 
-        // Make manual fields optional
-        repoUrl.required = false;
+        // Disable all manual fields to prevent validation
+        manualInputs.forEach(input => {
+            input.disabled = true;
+            input.required = false;
+        });
 
         // Update button text
         submitBtn.textContent = '🚀 Create & Deploy Project';
@@ -144,8 +144,13 @@ function toggleAutoCreate() {
         autoFields.style.display = 'none';
         manualFields.style.display = 'block';
 
+        // Re-enable manual fields
+        manualInputs.forEach(input => {
+            input.disabled = false;
+        });
+
         // Make repo URL required again
-        repoUrl.required = true;
+        document.getElementById('repo_url').required = true;
 
         // Update button text
         submitBtn.textContent = 'Create Project';
