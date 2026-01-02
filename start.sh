@@ -10,6 +10,10 @@ mkdir -p $DATA_DIR
 # Initialize database
 python -c "import database; database.init_db()"
 
+# Auto-import projects from environment variables
+echo "Checking for projects to auto-import..."
+python auto_import_projects.py
+
 # Start the Flask app with Gunicorn
 # - 2 workers for parallel request handling
 # - Embedded processor will run in background thread
