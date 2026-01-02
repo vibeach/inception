@@ -22,6 +22,7 @@ import incept_plus_suggester
 import incept_plus_tracker
 import incept_processor
 import project_automation
+import render_manager
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -758,6 +759,62 @@ def api_system_logs(project_id):
 def health():
     """Health check endpoint."""
     return jsonify({'status': 'ok'})
+
+
+# ==================== RENDER API MANAGEMENT ====================
+
+@app.route('/api/render/project/<int:project_id>/env-vars')
+@login_required
+def api_render_get_env_vars(project_id):
+    """Get environment variables for a project's Render service."""
+    project = database.get_project(project_id)
+    if not project or not project.get('render_service_id'):
+        return jsonify({'success': False, 'error': 'Project or Render service not found'}), 404
+
+    rm = render_manager.get_render_manager(project.get('render_api_key'))
+    success, result = rm.get_env_vars(project['render_service_id'])
+
+    if success:
+        return jsonify({'success': True, 'env_vars': result})
+    else:
+        return jsonify({'success': False, 'error': result}), 500
+
+
+@app.route('/api/render/project/<int:project_id>/env-vars', methods=['POST'])
+@login_required
+def api_render_set_env_vars(project_id):
+    """Set environment variables for a project's Render service."""
+    project = database.get_project(project_id)
+    if not project or not project.get('render_service_id'):
+        return jsonify({'success': False, 'error': 'Project or Render service not found'}), 404
+
+    data = request.get_json()
+    env_vars = data.get('env_vars', {})
+
+    rm = render_manager.get_render_manager(project.get('render_api_key'))
+    success, result = rm.set_env_vars(project['render_service_id'], env_vars)
+
+    if success:
+        return jsonify({'success': True, 'message': 'Environment variables updated', 'result': result})
+    else:
+        return jsonify({'success': False, 'error': result}), 500
+
+
+@app.route('/api/render/project/<int:project_id>/deploy', methods=['POST'])
+@login_required
+def api_render_trigger_deploy(project_id):
+    """Trigger a deploy for a project's Render service."""
+    project = database.get_project(project_id)
+    if not project or not project.get('render_service_id'):
+        return jsonify({'success': False, 'error': 'Project or Render service not found'}), 404
+
+    rm = render_manager.get_render_manager(project.get('render_api_key'))
+    success, result = rm.trigger_deploy(project['render_service_id'])
+
+    if success:
+        return jsonify({'success': True, 'message': 'Deploy triggered', 'result': result})
+    else:
+        return jsonify({'success': False, 'error': result}), 500
 
 
 # ==================== STARTUP ====================

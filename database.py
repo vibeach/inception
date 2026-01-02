@@ -221,17 +221,19 @@ def get_connection():
 # ==================== PROJECTS ====================
 
 def add_project(name, repo_url, description=None, repo_branch='main', github_token=None,
-                local_path=None, render_service_id=None, render_service_url=None, project_type=None):
+                local_path=None, render_service_id=None, render_service_url=None, project_type=None,
+                render_api_key=None):
     """Add a new project to manage."""
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO projects
             (name, description, repo_url, repo_branch, github_token, local_path,
-             render_service_id, render_service_url, project_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             render_service_id, render_service_url, project_type, render_api_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (name, description, repo_url, repo_branch, github_token or config.DEFAULT_GITHUB_TOKEN,
-              local_path, render_service_id, render_service_url, project_type))
+              local_path, render_service_id, render_service_url, project_type,
+              render_api_key or config.RENDER_API_KEY))
         conn.commit()
         return cursor.lastrowid
 
@@ -276,7 +278,7 @@ def get_project_by_name(name):
 
 def update_project(project_id, name=None, description=None, repo_url=None, repo_branch=None,
                    github_token=None, local_path=None, render_service_id=None,
-                   render_service_url=None, project_type=None, status=None):
+                   render_service_url=None, project_type=None, status=None, render_api_key=None):
     """Update project information."""
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -288,7 +290,7 @@ def update_project(project_id, name=None, description=None, repo_url=None, repo_
             ('repo_branch', repo_branch), ('github_token', github_token),
             ('local_path', local_path), ('render_service_id', render_service_id),
             ('render_service_url', render_service_url), ('project_type', project_type),
-            ('status', status)
+            ('status', status), ('render_api_key', render_api_key)
         ]:
             if value is not None:
                 updates.append(f"{field} = ?")
