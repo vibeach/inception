@@ -23,6 +23,7 @@ import incept_plus_tracker
 import incept_processor
 import project_automation
 import render_manager
+from logger import logger
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -704,6 +705,87 @@ def api_incept_plus_settings(project_id):
 
     settings = database.get_incept_plus_settings(project_id)
     return jsonify({'success': True, 'settings': settings})
+
+
+@app.route('/api/git/status/<int:project_id>')
+@login_required
+def api_git_status_project(project_id):
+    """Get git status for a specific project."""
+    project = database.get_project(project_id)
+    if not project or not project.get('local_path'):
+        return jsonify({'error': 'Project not found or has no local path'}), 404
+
+    try:
+        import subprocess
+        import os
+
+        local_path = project['local_path']
+        if not os.path.exists(local_path):
+            return jsonify({'error': 'Local path does not exist'}), 404
+
+        # Get current branch
+        result = subprocess.run(
+            ['git', 'branch', '--show-current'],
+            cwd=local_path,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        branch = result.stdout.strip() if result.returncode == 0 else 'unknown'
+
+        # Get ahead/behind count
+        ahead, behind = 0, 0
+        result = subprocess.run(
+            ['git', 'rev-list', '--count', '--left-right', f'origin/{branch}...HEAD'],
+            cwd=local_path,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            parts = result.stdout.strip().split('\t')
+            if len(parts) >= 2:
+                behind = int(parts[0])
+                ahead = int(parts[1])
+
+        # Get file status
+        result = subprocess.run(
+            ['git', 'status', '--porcelain'],
+            cwd=local_path,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        modified, staged, untracked = [], [], []
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                if not line:
+                    continue
+                status = line[:2]
+                filepath = line[3:]
+
+                if status[0] in ['M', 'A', 'D', 'R']:
+                    staged.append(filepath)
+                elif status[1] == 'M':
+                    modified.append(filepath)
+                elif status == '??':
+                    untracked.append(filepath)
+
+        return jsonify({
+            'success': True,
+            'branch': branch,
+            'ahead': ahead,
+            'behind': behind,
+            'modified': modified,
+            'staged': staged,
+            'untracked': untracked
+        })
+
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Git command timed out'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ==================== EMBEDDED PROCESSOR ====================
