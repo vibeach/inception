@@ -3,6 +3,37 @@
 {% block title %}Incept - {{ project.name }}{% endblock %}
 
 {% block content %}
+<style>
+/* Progress Timeline */
+.progress-timeline { display: flex; gap: 4px; margin-top: 8px; }
+.progress-dots { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.progress-dot { width: 6px; height: 6px; border-radius: 50%; }
+.progress-dot.info { background: #60a5fa; }
+.progress-dot.success { background: #10b981; }
+.progress-dot.error { background: #ef4444; }
+.progress-dot.warning { background: #f59e0b; }
+.timeline-separator { width: 8px; height: 1px; background: #334155; }
+.timeline-loading { font-size: 0.75rem; color: #94a3b8; }
+
+/* Git Status Panel */
+.git-status-section { background: #1e293b; padding: 20px; border-radius: 8px; margin-top: 20px; }
+.git-status-content { background: #0f172a; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 14px; }
+.git-branch { color: #60a5fa; font-weight: 600; margin-bottom: 10px; }
+.git-ahead-badge { display: inline-block; background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 10px; }
+.git-file-group { margin-top: 15px; }
+.git-file-group-title { color: #94a3b8; font-weight: 600; margin-bottom: 8px; }
+.git-file { padding: 6px 10px; margin-bottom: 4px; background: #1e293b; border-left: 3px solid #334155; border-radius: 4px; }
+.git-file.modified { border-left-color: #f59e0b; }
+.git-file.staged { border-left-color: #10b981; }
+.git-file.untracked { border-left-color: #94a3b8; }
+
+/* Restart Modal */
+.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.modal-content { background: #1e293b; padding: 30px; border-radius: 12px; min-width: 400px; max-width: 90%; }
+.modal-content h3 { margin-bottom: 20px; color: #60a5fa; }
+.modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+</style>
+
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <h1 style="font-size: 28px; color: #60a5fa;">Incept: {{ project.name }}</h1>
     <a href="/projects/{{ project.id }}" class="btn btn-secondary">← Back to Project</a>
@@ -75,6 +106,9 @@
                     <td>#{{ req.id }}</td>
                     <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">
                         {{ req.text }}
+                        <div class="progress-timeline" data-req-id="{{ req.id }}">
+                            <div class="timeline-loading">Loading...</div>
+                        </div>
                     </td>
                     <td><span class="badge badge-{{ req.status }}">{{ req.status }}</span></td>
                     <td style="font-size: 12px; color: #94a3b8;">{{ req.model }}</td>
@@ -88,7 +122,7 @@
                             Cancel
                         </button>
                         {% elif req.status in ['completed', 'error'] %}
-                        <button onclick="restartRequest({{ req.id }})" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;">
+                        <button onclick="showRestartModal({{ req.id }}, '{{ req.mode }}', '{{ req.model }}')" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;">
                             Restart
                         </button>
                         {% endif %}
@@ -100,6 +134,14 @@
         {% else %}
         <p style="color: #64748b;">No requests yet. Submit your first improvement request above!</p>
         {% endif %}
+    </div>
+</div>
+
+<!-- Git Status Panel -->
+<div class="git-status-section card">
+    <h2>Git Status</h2>
+    <div class="git-status-content" id="git-status-content">
+        <div style="color: #94a3b8;">Loading git status...</div>
     </div>
 </div>
 
@@ -120,6 +162,31 @@
         </div>
         <div id="logs-content" style="padding: 20px; overflow-y: auto; flex: 1; font-family: monospace; font-size: 13px;">
             <!-- Logs will be inserted here -->
+        </div>
+    </div>
+</div>
+
+<!-- Restart Modal -->
+<div id="restart-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <h3>Restart Request</h3>
+        <div class="form-group">
+            <label for="restart-mode">Mode:</label>
+            <select id="restart-mode" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: white;">
+                <option value="api">API</option>
+                <option value="cli_token">CLI Token</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-top: 15px;">
+            <label for="restart-model">Model:</label>
+            <select id="restart-model" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: white;">
+                <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                <option value="claude-opus-4-20250514">Claude Opus 4</option>
+            </select>
+        </div>
+        <div class="modal-actions">
+            <button onclick="confirmRestart()" class="btn btn-primary">Restart</button>
+            <button onclick="closeRestartModal()" class="btn btn-secondary">Cancel</button>
         </div>
     </div>
 </div>
@@ -277,6 +344,128 @@ function closeLogs() {
     fullLogContent = null;
 }
 
+// Progress Timeline Loader
+async function loadProgressTimelines() {
+    const timelines = document.querySelectorAll('.progress-timeline');
+    for (const timeline of timelines) {
+        const reqId = timeline.dataset.reqId;
+        try {
+            const response = await fetch(`/api/incept/request/${reqId}/logs`);
+            const data = await response.json();
+
+            if (!data.success || !data.logs || data.logs.length === 0) {
+                timeline.innerHTML = '';
+                continue;
+            }
+
+            let html = '<div class="progress-dots">';
+            data.logs.forEach((log, idx) => {
+                const dotClass = log.log_type || 'info';
+                html += `<span class="progress-dot ${dotClass}" title="${log.message} - ${new Date(log.timestamp).toLocaleString()}"></span>`;
+                if ((idx + 1) % 5 === 0 && idx < data.logs.length - 1) {
+                    html += '<div class="timeline-separator"></div>';
+                }
+            });
+            html += '</div>';
+            timeline.innerHTML = html;
+        } catch (err) {
+            timeline.innerHTML = '';
+        }
+    }
+}
+
+// Git Status Loader
+async function loadGitStatus() {
+    try {
+        const response = await fetch(`/api/git/status/${projectId}`);
+        const data = await response.json();
+
+        let html = '';
+        if (data.error) {
+            html = `<div style="color: #ef4444;">${data.error}</div>`;
+        } else {
+            html = `<div class="git-branch">Branch: ${data.branch}`;
+            if (data.ahead > 0) {
+                html += `<span class="git-ahead-badge">↑ ${data.ahead} ahead</span>`;
+            }
+            if (data.behind > 0) {
+                html += `<span class="git-ahead-badge" style="background: #f59e0b;">↓ ${data.behind} behind</span>`;
+            }
+            html += '</div>';
+
+            if (data.staged && data.staged.length > 0) {
+                html += '<div class="git-file-group"><div class="git-file-group-title">Staged:</div>';
+                data.staged.forEach(file => {
+                    html += `<div class="git-file staged">${file}</div>`;
+                });
+                html += '</div>';
+            }
+
+            if (data.modified && data.modified.length > 0) {
+                html += '<div class="git-file-group"><div class="git-file-group-title">Modified:</div>';
+                data.modified.forEach(file => {
+                    html += `<div class="git-file modified">${file}</div>`;
+                });
+                html += '</div>';
+            }
+
+            if (data.untracked && data.untracked.length > 0) {
+                html += '<div class="git-file-group"><div class="git-file-group-title">Untracked:</div>';
+                data.untracked.forEach(file => {
+                    html += `<div class="git-file untracked">${file}</div>`;
+                });
+                html += '</div>';
+            }
+
+            if (!data.staged.length && !data.modified.length && !data.untracked.length) {
+                html += '<div style="color: #10b981; margin-top: 10px;">✓ Working tree clean</div>';
+            }
+        }
+
+        document.getElementById('git-status-content').innerHTML = html;
+    } catch (err) {
+        document.getElementById('git-status-content').innerHTML = `<div style="color: #ef4444;">Error loading git status</div>`;
+    }
+}
+
+// Restart Modal
+let restartRequestId = null;
+
+function showRestartModal(reqId, currentMode, currentModel) {
+    restartRequestId = reqId;
+    document.getElementById('restart-mode').value = currentMode || 'api';
+    document.getElementById('restart-model').value = currentModel || 'claude-sonnet-4-20250514';
+    document.getElementById('restart-modal').style.display = 'flex';
+}
+
+function closeRestartModal() {
+    document.getElementById('restart-modal').style.display = 'none';
+    restartRequestId = null;
+}
+
+async function confirmRestart() {
+    const mode = document.getElementById('restart-mode').value;
+    const model = document.getElementById('restart-model').value;
+
+    try {
+        const response = await fetch(`/api/incept/request/${restartRequestId}/restart`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ mode, model })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            closeRestartModal();
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    } catch (err) {
+        alert('Error restarting request');
+    }
+}
+
 // Cancel request
 async function cancelRequest(reqId) {
     if (!confirm('Cancel this request?')) return;
@@ -289,17 +478,15 @@ async function cancelRequest(reqId) {
     location.reload();
 }
 
-// Restart request
-async function restartRequest(reqId) {
-    if (!confirm('Restart this request?')) return;
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadProgressTimelines();
+    loadGitStatus();
 
-    await fetch(`/api/incept/request/${reqId}/restart`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'}
-    });
-
-    location.reload();
-}
+    // Refresh every 30 seconds
+    setInterval(loadProgressTimelines, 30000);
+    setInterval(loadGitStatus, 30000);
+});
 
 // Auto-refresh pending requests
 setInterval(async () => {

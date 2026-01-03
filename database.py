@@ -738,6 +738,19 @@ def get_active_incept_auto_session(project_id=None):
         return dict(row) if row else None
 
 
+def get_all_active_auto_sessions():
+    """Get all currently active auto-mode sessions."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM incept_auto_sessions
+            WHERE status = 'running'
+            ORDER BY started_at DESC
+        """)
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
 # ==================== INCEPT PLUS SETTINGS ====================
 
 def get_incept_plus_settings(project_id):

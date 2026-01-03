@@ -32,6 +32,10 @@ app.secret_key = config.SECRET_KEY
 _embedded_processor_thread = None
 _embedded_processor_running = False
 
+# Embedded auto-mode worker state
+_embedded_auto_worker_thread = None
+_embedded_auto_worker_running = False
+
 
 # ==================== AUTH ====================
 
@@ -670,6 +674,8 @@ def api_incept_plus_auto_start():
         max_suggestions=data.get('max_suggestions', 10)
     )
 
+    _ensure_embedded_auto_worker()  # Start auto-mode worker if not running
+
     return jsonify({'success': True, 'session_id': session_id})
 
 
@@ -845,6 +851,84 @@ def api_processor_status():
     })
 
 
+@app.route('/api/processor/start', methods=['POST'])
+@login_required
+def api_processor_start():
+    """Start the embedded processor."""
+    _ensure_embedded_processor()
+    return jsonify({'success': True})
+
+
+@app.route('/api/processor/stop', methods=['POST'])
+@login_required
+def api_processor_stop():
+    """Stop the embedded processor."""
+    global _embedded_processor_running
+    _embedded_processor_running = False
+    return jsonify({'success': True})
+
+
+# ==================== EMBEDDED AUTO-MODE WORKER ====================
+
+def _run_embedded_auto_worker():
+    """Run auto-mode worker in background thread."""
+    global _embedded_auto_worker_running
+
+    import incept_plus_auto
+
+    print("Starting embedded auto-mode worker...")
+
+    while _embedded_auto_worker_running:
+        try:
+            # Check for active sessions across all projects
+            active_sessions = database.get_all_active_auto_sessions()
+
+            for session in active_sessions:
+                print(f"Processing auto-mode session {session['id']} for project {session['project_id']}")
+                try:
+                    incept_plus_auto.process_auto_mode_session(session)
+                except Exception as e:
+                    print(f"Error processing session {session['id']}: {e}")
+                    database.update_incept_auto_session(session['id'], status='error')
+
+            # Wait 60 seconds between checks
+            time.sleep(60)
+
+        except Exception as e:
+            print(f"Error in auto-mode worker: {e}")
+            time.sleep(60)
+
+    print("Embedded auto-mode worker stopped")
+
+
+def _ensure_embedded_auto_worker():
+    """Start auto-mode worker if enabled and not running."""
+    global _embedded_auto_worker_thread, _embedded_auto_worker_running
+
+    if not config.EMBEDDED_PROCESSOR:
+        return
+
+    if _embedded_auto_worker_thread is None or not _embedded_auto_worker_thread.is_alive():
+        _embedded_auto_worker_running = True
+        _embedded_auto_worker_thread = threading.Thread(
+            target=_run_embedded_auto_worker,
+            daemon=True
+        )
+        _embedded_auto_worker_thread.start()
+        print("Embedded auto-mode worker started")
+
+
+@app.route('/api/auto-mode/worker/status')
+@login_required
+def api_auto_mode_worker_status():
+    """Get auto-mode worker status."""
+    return jsonify({
+        'success': True,
+        'enabled': config.EMBEDDED_PROCESSOR,
+        'running': _embedded_auto_worker_running and _embedded_auto_worker_thread and _embedded_auto_worker_thread.is_alive()
+    })
+
+
 # ==================== SYSTEM ROUTES ====================
 
 @app.route('/api/system/logs/<int:project_id>')
@@ -920,12 +1004,13 @@ def api_render_trigger_deploy(project_id):
 # ==================== STARTUP ====================
 
 def init():
-    """Initialize database and start embedded processor if configured."""
+    """Initialize database and start embedded workers if configured."""
     database.init_db()
 
     if config.EMBEDDED_PROCESSOR:
         print("Auto-starting embedded processor (EMBEDDED_PROCESSOR=1)")
         _ensure_embedded_processor()
+        _ensure_embedded_auto_worker()
 
 
 if __name__ == '__main__':
