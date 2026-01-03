@@ -30,9 +30,10 @@ CLAUDE_CODE_OAUTH_TOKEN = os.getenv("CLAUDE_CODE_OAUTH_TOKEN", "")
 DEFAULT_GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 
 # Render API settings (for managing deployments)
-# REQUIRED for automated project creation: Set these in Render environment variables
+# Set these via environment variables (RENDER_API_KEY, RENDER_OWNER_ID, RENDER_SERVICE_ID)
 RENDER_API_KEY = os.getenv("RENDER_API_KEY", "")
-RENDER_OWNER_ID = os.getenv("RENDER_OWNER_ID", "")  # Your Render team/user ID
+RENDER_OWNER_ID = os.getenv("RENDER_OWNER_ID", "")  # Your Render team/user ID (optional)
+RENDER_SERVICE_ID = os.getenv("RENDER_SERVICE_ID", "")  # Default service for new projects
 
 # Embedded processor (auto-start processor in dashboard process)
 EMBEDDED_PROCESSOR = os.getenv("EMBEDDED_PROCESSOR", "1" if os.getenv("RENDER") else "0") == "1"

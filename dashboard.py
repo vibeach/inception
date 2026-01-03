@@ -167,7 +167,7 @@ def new_project():
                     flash(f'GitHub creation failed: {result}', 'error')
                     return render_template('new_project.html')
 
-                # Add to database (no Render details)
+                # Add to database (with default Render service ID if not provided)
                 project_id = database.add_project(
                     name=result['name'],
                     description=result['description'],
@@ -175,7 +175,7 @@ def new_project():
                     repo_branch=result['repo_branch'],
                     github_token=result['github_token'],
                     local_path=request.form.get('local_path'),
-                    render_service_id=request.form.get('render_service_id'),
+                    render_service_id=request.form.get('render_service_id') or config.RENDER_SERVICE_ID,
                     render_service_url=request.form.get('render_service_url'),
                     project_type=result['project_type']
                 )
@@ -246,7 +246,7 @@ def new_project():
                     repo_branch=request.form.get('repo_branch', 'main'),
                     github_token=request.form.get('github_token') or config.DEFAULT_GITHUB_TOKEN,
                     local_path=request.form.get('local_path'),
-                    render_service_id=request.form.get('render_service_id'),
+                    render_service_id=request.form.get('render_service_id') or config.RENDER_SERVICE_ID,
                     render_service_url=request.form.get('render_service_url'),
                     project_type=project_type
                 )
