@@ -5,6 +5,17 @@ Multi-project self-improvement system
 """
 
 import os
+from pathlib import Path
+
+# Load .env file automatically
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).parent / '.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+except ImportError:
+    # python-dotenv not installed, will use environment variables only
+    pass
 
 # Persistent data directory (use /data on Render, local dir otherwise)
 DATA_DIR = os.getenv("DATA_DIR", os.path.dirname(__file__))
