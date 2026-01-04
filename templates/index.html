@@ -8,6 +8,21 @@
     <a href="/projects/new" class="btn btn-primary">+ New Project</a>
 </div>
 
+<!-- Quick Create Section -->
+<div class="card" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 2px solid #10b981; margin-bottom: 30px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h2 style="color: #10b981; margin-bottom: 10px;">🚀 Quick Create New Project</h2>
+            <p style="color: #94a3b8; font-size: 14px; margin-bottom: 0;">
+                All credentials pre-configured. Just enter a project name to auto-create GitHub repo + Render deployment!
+            </p>
+        </div>
+        <a href="/projects/new" class="btn btn-success" style="white-space: nowrap; background: #10b981; border-color: #10b981;">
+            Create Project →
+        </a>
+    </div>
+</div>
+
 {% if projects %}
 <div class="grid grid-3">
     {% for project in projects %}

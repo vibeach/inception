@@ -8,14 +8,14 @@
 <div class="card">
     <form method="POST" id="project-form">
         <!-- Automated Creation Toggle -->
-        <div style="background: #1e293b; border: 2px solid #3b82f6; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
-            <label style="display: flex; align-items: center; cursor: pointer; font-size: 16px; color: #60a5fa;">
-                <input type="checkbox" id="auto-create" name="auto_create" style="width: auto; margin-right: 10px;" onchange="toggleAutoCreate()">
+        <div style="background: #1e293b; border: 2px solid #10b981; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; cursor: pointer; font-size: 16px; color: #10b981;">
+                <input type="checkbox" id="auto-create" name="auto_create" checked style="width: auto; margin-right: 10px;" onchange="toggleAutoCreate()">
                 <strong>🚀 Automatically create GitHub repo and deploy to Render</strong>
             </label>
             <p style="color: #94a3b8; font-size: 14px; margin-top: 8px; margin-left: 28px;">
-                When checked, Inception will create a new GitHub repository with a starter template,
-                initialize it with code, and automatically deploy it to Render. Perfect for new projects!
+                Enabled by default. Inception will create a new GitHub repository with a starter template,
+                initialize it with code, and automatically deploy it to Render. All credentials pre-configured!
             </p>
         </div>
         <div class="grid grid-2">
@@ -27,8 +27,7 @@
             <div class="form-group">
                 <label for="project_type">Project Type</label>
                 <select id="project_type" name="project_type">
-                    <option value="">Select...</option>
-                    <option value="Flask">Flask</option>
+                    <option value="Flask" selected>Flask (Default)</option>
                     <option value="Django">Django</option>
                     <option value="Node.js">Node.js</option>
                     <option value="React">React</option>
